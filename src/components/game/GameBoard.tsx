@@ -13,6 +13,7 @@ import boardBg from '@/assets/game-board-bg.png';
 interface GameBoardProps {
   onExit: () => void;
   deckComposition?: { card_id: string; quantity: number }[];
+  playerName?: string;
 }
 
 type SelectionPhase =
@@ -20,7 +21,7 @@ type SelectionPhase =
   | { type: 'card-selected'; cardId: string }
   | { type: 'picking-target'; qaCardId: string };
 
-export default function GameBoard({ onExit, deckComposition }: GameBoardProps) {
+export default function GameBoard({ onExit, deckComposition, playerName = 'Jugador' }: GameBoardProps) {
   const game = useGameLogic(deckComposition);
   const isPlayerTurn = game.turn === 'player';
   const [selection, setSelection] = useState<SelectionPhase>({ type: 'none' });
@@ -211,7 +212,7 @@ export default function GameBoard({ onExit, deckComposition }: GameBoardProps) {
           }`}
         >
           {isPlayerTurn
-            ? selection.type === 'picking-target' ? '🎯 OBJETIVO' : '🟢 TU TURNO'
+            ? selection.type === 'picking-target' ? '🎯 OBJETIVO' : `🟢 ${playerName.toUpperCase()}`
             : '🔴 RIVAL'}
         </motion.div>
 
@@ -230,7 +231,7 @@ export default function GameBoard({ onExit, deckComposition }: GameBoardProps) {
           animate={{ scale: 1 }}
           className="flex items-center gap-0.5 bg-black/40 backdrop-blur-sm px-2 py-0.5 rounded-full border border-emerald-700/30"
         >
-          <span className="text-[9px] sm:text-xs font-display text-emerald-300/70 mr-0.5">TÚ</span>
+          <span className="text-[9px] sm:text-xs font-display text-emerald-300/70 mr-0.5">{playerName}</span>
           {Array.from({ length: game.playerMaxEnergy }).map((_, i) => (
             <motion.span
               key={i}
@@ -275,7 +276,7 @@ export default function GameBoard({ onExit, deckComposition }: GameBoardProps) {
       {/* ===== DECK ===== */}
       <div className="absolute left-[1%] sm:left-[4%] top-[35%] -translate-y-1/2 z-10 flex flex-col items-center gap-3 sm:gap-8">
         <DeckPile count={game.botDeck.length} label="BOT" />
-        <DeckPile count={game.playerDeck.length} label="TÚ" />
+        <DeckPile count={game.playerDeck.length} label={playerName} />
       </div>
 
       {/* ===== Skip turn button — bigger, on right edge of mat ===== */}
@@ -407,7 +408,7 @@ export default function GameBoard({ onExit, deckComposition }: GameBoardProps) {
             })}
           </div>
           <div className="text-[10px] font-display text-amber-200/30 uppercase tracking-[0.3em] mt-1 text-center">
-            Tu mesa ({game.playerTable.filter(Boolean).length}/{TABLE_MAX})
+            {playerName} ({game.playerTable.filter(Boolean).length}/{TABLE_MAX})
           </div>
         </div>
       </div>
@@ -432,7 +433,7 @@ export default function GameBoard({ onExit, deckComposition }: GameBoardProps) {
       <div className="absolute bottom-0 left-0 right-0 z-15 h-[22%]">
         <div className="w-full h-full flex flex-col items-center justify-center">
           <div className="text-[8px] sm:text-[10px] font-display text-amber-200/40 uppercase tracking-[0.2em] sm:tracking-[0.3em] mb-1 sm:mb-2 px-2 text-center">
-            Tu mano ({game.playerHand.length}) — arrastra a un hueco
+            {playerName} ({game.playerHand.length}) — arrastra a un hueco
           </div>
           <div className="flex items-center justify-center gap-1 sm:gap-2 px-2 sm:px-8">
             <AnimatePresence>
@@ -534,7 +535,7 @@ export default function GameBoard({ onExit, deckComposition }: GameBoardProps) {
                 <>
                   <div className="text-6xl mb-4">{game.lastAttacker === 'player' ? '✅' : '❌'}</div>
                   <h2 className="text-3xl font-display font-bold text-amber-100 mb-3">
-                    {game.lastAttacker === 'player' ? '¡Punto para ti!' : 'Punto para el Bot'}
+                    {game.lastAttacker === 'player' ? `¡Punto para ${playerName}!` : 'Punto para el Bot'}
                   </h2>
                   <p className="text-xl text-amber-200/60 font-body">{game.playerScore} - {game.botScore}</p>
                 </>

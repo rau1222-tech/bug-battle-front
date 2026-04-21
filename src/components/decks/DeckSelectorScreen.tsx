@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Plus, Pencil, Copy, Trash2, Play, ArrowLeft, Loader2, Check } from 'lucide-react';
-import { useAnonAuth } from '@/hooks/useAnonAuth';
+import { useAuth } from '@/hooks/useAuth';
 import {
   useDecks,
   deleteDeckRecord,
@@ -21,7 +21,7 @@ interface Props {
 }
 
 export default function DeckSelectorScreen({ onBack, onPlay, onCreate, onEdit }: Props) {
-  const { user, loading: authLoading } = useAnonAuth();
+  const { user, loading: authLoading } = useAuth();
   const { decks, loading, refresh } = useDecks(user?.id);
   const [activeId, setActiveId] = useState<string | null>(getActiveDeckId());
   const [busyId, setBusyId] = useState<string | null>(null);

@@ -4,7 +4,11 @@ import GameBoard from '@/components/game/GameBoard';
 import DeckSelectorScreen from '@/components/decks/DeckSelectorScreen';
 import DeckBuilderScreen from '@/components/decks/DeckBuilderScreen';
 import GachaScreen from '@/components/gacha/GachaScreen';
-import { useAnonAuth } from '@/hooks/useAnonAuth';
+import AuthScreen from '@/components/auth/AuthScreen';
+import ProfileMenu from '@/components/auth/ProfileMenu';
+import PickNameScreen from '@/components/auth/PickNameScreen';
+import { useAuth } from '@/hooks/useAuth';
+import { useProfile } from '@/hooks/useProfile';
 import { useDecks, getActiveDeckId, type DeckSummary } from '@/hooks/useDecks';
 import boardBg from '@/assets/game-board-bg.png';
 
@@ -15,8 +19,11 @@ export default function Index() {
   const [editing, setEditing] = useState<DeckSummary | null>(null);
   const [activeComposition, setActiveComposition] = useState<{ card_id: string; quantity: number }[] | undefined>(undefined);
 
-  const { user } = useAnonAuth();
+  const { user, loading: authLoading, signInWithEmail, signUpWithEmail, signInWithGoogle, signOut } = useAuth();
+  const { profile, needsSetup, loading: profileLoading, createProfile } = useProfile(user);
   const { decks, refresh } = useDecks(user?.id);
+
+  const playerName = profile?.display_name ?? 'Jugador';
 
   // Resolve active deck composition before launching game
   const launchGame = (deckId: string) => {
@@ -39,8 +46,51 @@ export default function Index() {
     }
   };
 
+  // Show loading spinner while checking auth or profile
+  if (authLoading || (user && profileLoading)) {
+    return (
+      <div className="h-[100dvh] flex items-center justify-center bg-stone-950">
+        <div className="text-amber-200/50 font-display text-sm animate-pulse">Cargando...</div>
+      </div>
+    );
+  }
+
+  // Show auth screen if not logged in
+  if (!user) {
+    return (
+      <AuthScreen
+        onSignInEmail={async (email, password) => {
+          const err = await signInWithEmail(email, password);
+          return { error: err?.message ?? null };
+        }}
+        onSignUpEmail={async (email, password) => {
+          const err = await signUpWithEmail(email, password);
+          return { error: err?.message ?? null };
+        }}
+        onSignInGoogle={async () => {
+          const err = await signInWithGoogle();
+          return { error: err?.message ?? null };
+        }}
+      />
+    );
+  }
+
+  // Show name picker for new users (Google sign-in without profile)
+  if (needsSetup) {
+    const meta = user.user_metadata ?? {};
+    const suggestedName = meta.full_name ?? meta.name ?? '';
+    const avatarUrl = meta.avatar_url ?? meta.picture ?? null;
+    return (
+      <PickNameScreen
+        suggestedName={suggestedName}
+        avatarUrl={avatarUrl}
+        onConfirm={createProfile}
+      />
+    );
+  }
+
   if (screen === 'game-bot') {
-    return <GameBoard deckComposition={activeComposition} onExit={() => setScreen('menu')} />;
+    return <GameBoard deckComposition={activeComposition} onExit={() => setScreen('menu')} playerName={playerName} />;  
   }
 
   if (screen === 'gacha') {
@@ -167,6 +217,9 @@ export default function Index() {
         <span className="text-lg group-hover:scale-110 transition-transform">📦</span>
         <span className="font-display text-xs tracking-[0.15em] uppercase">Reclutar</span>
       </motion.button>
+
+      {/* Profile menu — top right */}
+      {profile && <ProfileMenu profile={profile} email={user?.email} onSignOut={signOut} />}
     </div>
   );
 }
