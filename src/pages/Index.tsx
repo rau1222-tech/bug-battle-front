@@ -10,7 +10,6 @@ import PickNameScreen from '@/components/auth/PickNameScreen';
 import { useAuth } from '@/hooks/useAuth';
 import { useProfile } from '@/hooks/useProfile';
 import { useDecks, getActiveDeckId, type DeckSummary } from '@/hooks/useDecks';
-import boardBg from '@/assets/game-board-bg.png';
 
 type Screen = 'menu' | 'deck-selector' | 'deck-builder' | 'game-bot' | 'gacha';
 
@@ -49,8 +48,8 @@ export default function Index() {
   // Show loading spinner while checking auth or profile
   if (authLoading || (user && profileLoading)) {
     return (
-      <div className="h-[100dvh] flex items-center justify-center bg-stone-950">
-        <div className="text-amber-200/50 font-display text-sm animate-pulse">Cargando...</div>
+      <div className="h-[100dvh] flex items-center justify-center bg-[hsl(220,20%,6%)] bg-grid-pattern">
+        <div className="text-cyan-300/50 font-display text-sm animate-pulse tracking-wider">Cargando...</div>
       </div>
     );
   }
@@ -142,81 +141,109 @@ export default function Index() {
   }
 
   return (
-    <div
-      className="h-[100dvh] w-full flex flex-col items-center justify-center relative overflow-hidden"
-      style={{
-        backgroundImage: `url(${boardBg})`,
-        backgroundSize: 'cover',
-        backgroundPosition: 'center',
-      }}
-    >
+    <div className="h-[100dvh] w-full flex flex-col items-center justify-center relative overflow-hidden bg-[hsl(220,20%,6%)] bg-grid-pattern">
+      {/* Ambient glow effects */}
+      <div className="absolute top-1/4 left-1/3 w-72 h-72 bg-cyan-500/5 rounded-full blur-[100px] pointer-events-none" />
+      <div className="absolute bottom-1/4 right-1/4 w-60 h-60 bg-purple-500/5 rounded-full blur-[100px] pointer-events-none" />
+
       <motion.div
-        initial={{ opacity: 0, y: 20 }}
+        initial={{ opacity: 0, y: 30 }}
         animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.6 }}
-        className="flex flex-col items-center gap-8 z-10 px-6"
+        transition={{ duration: 0.7, ease: 'easeOut' }}
+        className="z-10 w-full max-w-sm px-4"
       >
-        {/* Logo */}
-        <div className="text-center">
+        {/* Logo section */}
+        <div className="text-center mb-8">
           <motion.div
-            animate={{ y: [0, -6, 0] }}
-            transition={{ duration: 3, repeat: Infinity, ease: 'easeInOut' }}
-            className="text-7xl mb-4"
+            animate={{ y: [0, -5, 0], rotate: [0, 3, -3, 0] }}
+            transition={{ duration: 4, repeat: Infinity, ease: 'easeInOut' }}
+            className="text-6xl mb-3 inline-block"
           >
             🐛
           </motion.div>
-          <h1 className="text-4xl font-display font-bold text-amber-100 tracking-wider drop-shadow-lg">
+          <h1 className="text-3xl font-display font-bold text-cyan-100 tracking-[0.2em] text-glow-blue">
             BUG HUNTERS
           </h1>
-          <p className="text-sm font-body text-amber-200/50 mt-2">
-            Juego de Cartas Coleccionables
+          <p className="text-xs font-body text-cyan-300/40 mt-1 tracking-wider uppercase">
+            Collectible Card Game
           </p>
         </div>
 
-        {/* Play buttons */}
-        <div className="flex flex-col gap-3 w-full max-w-xs">
-          <button
-            onClick={handleDebugLocal}
-            className="h-14 font-display text-sm tracking-wide rounded-xl bg-amber-700/70 text-amber-100 hover:bg-amber-600/70 border border-amber-500/30 backdrop-blur-sm shadow-lg shadow-black/30 transition-all hover:shadow-amber-500/10"
-          >
-            🤖 DEBUG LOCAL (VS IA)
-          </button>
-          <button
-            disabled
-            className="h-14 font-display text-sm tracking-wide rounded-xl bg-stone-800/50 text-amber-200/30 border border-amber-900/20 backdrop-blur-sm cursor-not-allowed"
-          >
-            🌐 ONLINE PvP (Próximamente)
-          </button>
+        {/* Terminal-style panel */}
+        <div className="rounded-lg border border-cyan-500/20 bg-[hsl(220,20%,8%)]/90 backdrop-blur-md shadow-[0_0_40px_-10px_hsl(200,100%,50%,0.15)] overflow-hidden">
+          {/* Terminal title bar */}
+          <div className="flex items-center gap-2 px-4 py-2 border-b border-cyan-500/10 bg-[hsl(220,18%,10%)]">
+            <div className="flex gap-1.5">
+              <div className="w-2.5 h-2.5 rounded-full bg-red-500/70" />
+              <div className="w-2.5 h-2.5 rounded-full bg-yellow-500/70" />
+              <div className="w-2.5 h-2.5 rounded-full bg-green-500/70" />
+            </div>
+            <span className="ml-2 text-[10px] font-body text-cyan-400/50 tracking-wider uppercase">
+              ~/bug-hunters/main-menu
+            </span>
+          </div>
+
+          {/* Panel content */}
+          <div className="p-4 flex flex-col gap-3">
+            {/* Primary action: Play */}
+            <motion.button
+              whileHover={{ scale: 1.02 }}
+              whileTap={{ scale: 0.98 }}
+              onClick={handleDebugLocal}
+              className="w-full h-14 font-display text-sm tracking-wider rounded-md bg-gradient-to-r from-cyan-600/80 to-blue-600/80 text-white hover:from-cyan-500/90 hover:to-blue-500/90 border border-cyan-400/30 shadow-[0_0_20px_-5px_hsl(200,100%,50%,0.3)] transition-all hover:shadow-[0_0_25px_-5px_hsl(200,100%,50%,0.5)] flex items-center justify-center gap-2"
+            >
+              <span className="text-lg">▶</span>
+              <span>JUGAR VS IA</span>
+            </motion.button>
+
+            {/* Disabled PvP */}
+            <button
+              disabled
+              className="w-full h-12 font-display text-xs tracking-wider rounded-md bg-[hsl(220,15%,12%)] text-cyan-200/20 border border-cyan-900/20 cursor-not-allowed flex items-center justify-center gap-2"
+            >
+              <span className="text-sm">🌐</span>
+              <span>ONLINE PvP — PRÓXIMAMENTE</span>
+            </button>
+
+            {/* Divider */}
+            <div className="flex items-center gap-3 my-1">
+              <div className="flex-1 h-px bg-gradient-to-r from-transparent via-cyan-500/20 to-transparent" />
+              <span className="text-[9px] font-body text-cyan-500/30 uppercase tracking-widest">Colección</span>
+              <div className="flex-1 h-px bg-gradient-to-r from-transparent via-cyan-500/20 to-transparent" />
+            </div>
+
+            {/* Secondary actions row */}
+            <div className="grid grid-cols-2 gap-3">
+              <motion.button
+                whileHover={{ scale: 1.03 }}
+                whileTap={{ scale: 0.97 }}
+                onClick={() => setScreen('gacha')}
+                className="h-14 flex flex-col items-center justify-center gap-1 rounded-md bg-gradient-to-b from-purple-600/30 to-purple-900/30 text-purple-200 hover:from-purple-500/40 hover:to-purple-800/40 border border-purple-500/25 shadow-[0_0_15px_-5px_hsl(260,80%,60%,0.2)] transition-all hover:shadow-[0_0_20px_-5px_hsl(260,80%,60%,0.4)] hover:border-purple-400/40"
+              >
+                <span className="text-xl">📦</span>
+                <span className="font-display text-[10px] tracking-[0.15em] uppercase">Reclutar</span>
+              </motion.button>
+
+              <motion.button
+                whileHover={{ scale: 1.03 }}
+                whileTap={{ scale: 0.97 }}
+                onClick={() => setScreen('deck-selector')}
+                className="h-14 flex flex-col items-center justify-center gap-1 rounded-md bg-gradient-to-b from-emerald-600/30 to-emerald-900/30 text-emerald-200 hover:from-emerald-500/40 hover:to-emerald-800/40 border border-emerald-500/25 shadow-[0_0_15px_-5px_hsl(150,80%,45%,0.2)] transition-all hover:shadow-[0_0_20px_-5px_hsl(150,80%,45%,0.4)] hover:border-emerald-400/40"
+              >
+                <span className="text-xl">🃏</span>
+                <span className="font-display text-[10px] tracking-[0.15em] uppercase">Mis Mazos</span>
+              </motion.button>
+            </div>
+          </div>
+
+          {/* Terminal footer */}
+          <div className="px-4 py-2 border-t border-cyan-500/10 bg-[hsl(220,18%,10%)]">
+            <p className="text-[10px] font-body text-cyan-400/30 flex items-center gap-1">
+              <span className="text-green-400/60">❯</span> Arrastra Programadores al Bug. Usa QA contra rivales. ¡El golpe final gana!
+            </p>
+          </div>
         </div>
-
-        <p className="text-[11px] text-amber-200/30 font-body text-center max-w-xs">
-          Arrastra tus Programadores al Bug para reducir su complejidad. Usa cartas QA contra los programadores rivales. ¡El golpe final gana el punto!
-        </p>
       </motion.div>
-
-      {/* Deck button — bottom right */}
-      <motion.button
-        initial={{ opacity: 0, x: 20 }}
-        animate={{ opacity: 1, x: 0 }}
-        transition={{ duration: 0.5, delay: 0.3 }}
-        onClick={() => setScreen('deck-selector')}
-        className="fixed bottom-5 right-5 z-20 flex items-center gap-2 pl-4 pr-5 py-2.5 rounded-full bg-stone-900/80 text-amber-100 hover:bg-stone-800/90 border border-amber-700/40 backdrop-blur-md shadow-lg shadow-black/40 transition-all hover:border-amber-500/50 hover:shadow-amber-900/20 group"
-      >
-        <span className="text-lg group-hover:scale-110 transition-transform">🃏</span>
-        <span className="font-display text-xs tracking-[0.15em] uppercase">Mis Mazos</span>
-      </motion.button>
-
-      {/* Gacha button — bottom left */}
-      <motion.button
-        initial={{ opacity: 0, x: -20 }}
-        animate={{ opacity: 1, x: 0 }}
-        transition={{ duration: 0.5, delay: 0.4 }}
-        onClick={() => setScreen('gacha')}
-        className="fixed bottom-5 left-5 z-20 flex items-center gap-2 pl-4 pr-5 py-2.5 rounded-full bg-gradient-to-r from-purple-900/70 to-indigo-900/70 text-purple-100 hover:from-purple-800/80 hover:to-indigo-800/80 border border-purple-500/30 backdrop-blur-md shadow-lg shadow-purple-900/30 transition-all hover:border-purple-400/50 hover:shadow-purple-500/20 group"
-      >
-        <span className="text-lg group-hover:scale-110 transition-transform">📦</span>
-        <span className="font-display text-xs tracking-[0.15em] uppercase">Reclutar</span>
-      </motion.button>
 
       {/* Profile menu — top right */}
       {profile && <ProfileMenu profile={profile} email={user?.email} onSignOut={signOut} />}

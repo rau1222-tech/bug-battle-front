@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Plus, Pencil, Copy, Trash2, Play, ArrowLeft, Loader2, Check } from 'lucide-react';
+import { Plus, Pencil, Copy, Trash2, Play, Loader2, Check } from 'lucide-react';
+import BackButton from '@/components/ui/BackButton';
 import { useAuth } from '@/hooks/useAuth';
 import {
   useDecks,
@@ -11,7 +12,6 @@ import {
   type DeckSummary,
 } from '@/hooks/useDecks';
 import { toast } from 'sonner';
-import boardBg from '@/assets/game-board-bg.png';
 
 interface Props {
   onBack: () => void;
@@ -74,35 +74,24 @@ export default function DeckSelectorScreen({ onBack, onPlay, onCreate, onEdit }:
   const mine = decks.filter((d) => !d.is_preset);
 
   return (
-    <div
-      className="min-h-[100dvh] w-full relative"
-      style={{
-        backgroundImage: `url(${boardBg})`,
-        backgroundSize: 'cover',
-        backgroundPosition: 'center',
-      }}
-    >
-      <div className="absolute inset-0 bg-black/60" />
+    <div className="min-h-[100dvh] w-full relative bg-[hsl(220,20%,6%)] bg-grid-pattern">
+      {/* Ambient glow */}
+      <div className="fixed top-1/4 right-1/4 w-80 h-80 bg-emerald-500/5 rounded-full blur-[120px] pointer-events-none" />
+      <div className="fixed bottom-1/3 left-1/3 w-60 h-60 bg-teal-500/5 rounded-full blur-[100px] pointer-events-none" />
 
       <div className="relative z-10 max-w-5xl mx-auto px-4 py-6 sm:px-6 sm:py-10">
         {/* Header */}
         <div className="flex items-center justify-between mb-6">
-          <button
-            onClick={onBack}
-            className="flex items-center gap-1.5 text-amber-200/80 hover:text-amber-100 transition-colors"
-          >
-            <ArrowLeft className="w-4 h-4" />
-            <span className="font-display text-xs tracking-wider">VOLVER</span>
-          </button>
-          <h1 className="font-display text-lg sm:text-2xl text-amber-100 tracking-wider">
+          <BackButton onClick={onBack} color="emerald" />
+          <h1 className="font-display text-lg sm:text-2xl text-emerald-100 tracking-wider text-glow-green">
             🃏 MIS MAZOS
           </h1>
-          <div className="w-16" />
+          <div className="w-20" />
         </div>
 
         {(authLoading || loading) && (
           <div className="flex justify-center py-20">
-            <Loader2 className="w-8 h-8 text-amber-300/70 animate-spin" />
+            <Loader2 className="w-8 h-8 text-emerald-300/70 animate-spin" />
           </div>
         )}
 
@@ -132,10 +121,10 @@ export default function DeckSelectorScreen({ onBack, onPlay, onCreate, onEdit }:
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
                 <button
                   onClick={onCreate}
-                  className="group min-h-[120px] rounded-xl border-2 border-dashed border-amber-700/40 bg-stone-900/30 hover:bg-stone-900/50 hover:border-amber-500/60 transition-all flex flex-col items-center justify-center gap-2 backdrop-blur-sm"
+                  className="group min-h-[120px] rounded-lg border-2 border-dashed border-emerald-600/30 bg-[hsl(220,20%,8%)]/60 hover:bg-[hsl(220,20%,10%)]/70 hover:border-emerald-400/50 transition-all flex flex-col items-center justify-center gap-2"
                 >
-                  <Plus className="w-8 h-8 text-amber-300/60 group-hover:text-amber-200 transition-colors" />
-                  <span className="font-display text-xs tracking-wider text-amber-200/70 group-hover:text-amber-100">
+                  <Plus className="w-8 h-8 text-emerald-300/50 group-hover:text-emerald-200 transition-colors" />
+                  <span className="font-display text-xs tracking-wider text-emerald-200/60 group-hover:text-emerald-100">
                     CREAR MAZO NUEVO
                   </span>
                 </button>
@@ -166,11 +155,23 @@ export default function DeckSelectorScreen({ onBack, onPlay, onCreate, onEdit }:
 function Section({ title, subtitle, children }: { title: string; subtitle: string; children: React.ReactNode }) {
   return (
     <section className="mb-8">
-      <div className="mb-3">
-        <h2 className="font-display text-sm sm:text-base text-amber-200 tracking-[0.2em] uppercase">{title}</h2>
-        <p className="text-[10px] sm:text-xs font-body text-amber-200/50">{subtitle}</p>
+      <div className="rounded-lg border border-emerald-500/15 bg-[hsl(220,20%,8%)]/90 backdrop-blur-md overflow-hidden">
+        {/* Section title bar */}
+        <div className="flex items-center gap-2 px-4 py-2 border-b border-emerald-500/10 bg-[hsl(220,18%,10%)]">
+          <div className="flex gap-1.5">
+            <div className="w-2 h-2 rounded-full bg-red-500/60" />
+            <div className="w-2 h-2 rounded-full bg-yellow-500/60" />
+            <div className="w-2 h-2 rounded-full bg-green-500/60" />
+          </div>
+          <div className="ml-2">
+            <span className="text-[10px] font-body text-emerald-400/50 tracking-wider uppercase">{title}</span>
+          </div>
+        </div>
+        <div className="p-3 sm:p-4">
+          <p className="text-[10px] sm:text-xs font-body text-emerald-200/40 mb-3">{subtitle}</p>
+          {children}
+        </div>
       </div>
-      {children}
     </section>
   );
 }
@@ -193,14 +194,14 @@ function DeckCard({ deck, isActive, busy, onPlay, onSetActive, onEdit, onDuplica
       initial={{ opacity: 0, y: 10 }}
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, scale: 0.95 }}
-      className={`relative rounded-xl border-2 backdrop-blur-sm overflow-hidden transition-all ${
+      className={`relative rounded-lg border overflow-hidden transition-all ${
         isActive
-          ? 'border-amber-400 bg-amber-950/40 shadow-lg shadow-amber-500/20'
-          : 'border-amber-900/40 bg-stone-900/60 hover:border-amber-700/60'
+          ? 'border-emerald-400/60 bg-emerald-950/30 shadow-[0_0_20px_-5px_hsl(150,80%,45%,0.2)]'
+          : 'border-emerald-900/30 bg-[hsl(220,15%,11%)] hover:border-emerald-600/40'
       }`}
     >
       {isActive && (
-        <div className="absolute top-2 right-2 z-10 flex items-center gap-1 bg-amber-500/90 text-amber-950 px-1.5 py-0.5 rounded text-[9px] font-display font-bold tracking-wider">
+        <div className="absolute top-2 right-2 z-10 flex items-center gap-1 bg-emerald-500/90 text-emerald-950 px-1.5 py-0.5 rounded text-[9px] font-display font-bold tracking-wider">
           <Check className="w-3 h-3" /> ACTIVO
         </div>
       )}
@@ -208,23 +209,23 @@ function DeckCard({ deck, isActive, busy, onPlay, onSetActive, onEdit, onDuplica
         <div className="flex items-start gap-3">
           <div className="text-4xl sm:text-5xl shrink-0">{deck.cover_emoji}</div>
           <div className="flex-1 min-w-0">
-            <h3 className="font-display text-sm text-amber-100 truncate">{deck.name}</h3>
+            <h3 className="font-display text-sm text-emerald-100 truncate">{deck.name}</h3>
             <div className="flex items-center gap-2 mt-1 text-[10px] font-body">
-              <span className="text-amber-200/60">
-                ⚡ {deck.programadores} <span className="text-amber-200/40">prog</span>
+              <span className="text-cyan-300/60">
+                ⚡ {deck.programadores} <span className="text-cyan-300/40">prog</span>
               </span>
               <span className="text-emerald-300/70">
                 🛡 {deck.qas} <span className="text-emerald-300/50">qa</span>
               </span>
-              <span className={`ml-auto font-display font-bold ${isValid ? 'text-amber-300' : 'text-red-400'}`}>
+              <span className={`ml-auto font-display font-bold ${isValid ? 'text-emerald-300' : 'text-red-400'}`}>
                 {deck.total}/20
               </span>
             </div>
             <span
               className={`inline-block mt-1.5 text-[8px] font-display tracking-wider px-1.5 py-0.5 rounded uppercase ${
                 deck.is_preset
-                  ? 'bg-stone-700/70 text-amber-200/80'
-                  : 'bg-emerald-900/60 text-emerald-200/90'
+                  ? 'bg-[hsl(220,15%,15%)] text-emerald-200/60'
+                  : 'bg-emerald-900/40 text-emerald-200/90 border border-emerald-600/20'
               }`}
             >
               {deck.is_preset ? 'Preset' : 'Mío'}
@@ -236,7 +237,7 @@ function DeckCard({ deck, isActive, busy, onPlay, onSetActive, onEdit, onDuplica
           <button
             onClick={onPlay}
             disabled={!isValid || busy}
-            className="flex-1 min-w-[80px] flex items-center justify-center gap-1 h-8 rounded-md bg-amber-700/80 hover:bg-amber-600 text-amber-50 font-display text-[10px] tracking-wider disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+            className="flex-1 min-w-[80px] flex items-center justify-center gap-1 h-8 rounded-md bg-emerald-600/60 hover:bg-emerald-500/70 text-emerald-50 font-display text-[10px] tracking-wider disabled:opacity-40 disabled:cursor-not-allowed transition-colors border border-emerald-500/20"
           >
             <Play className="w-3 h-3" /> JUGAR
           </button>
@@ -244,7 +245,7 @@ function DeckCard({ deck, isActive, busy, onPlay, onSetActive, onEdit, onDuplica
             <button
               onClick={onSetActive}
               disabled={!isValid || busy}
-              className="px-2 h-8 rounded-md bg-stone-700/70 hover:bg-stone-600/70 text-amber-200/90 font-display text-[10px] tracking-wider disabled:opacity-40 transition-colors"
+              className="px-2 h-8 rounded-md bg-[hsl(220,15%,15%)] hover:bg-[hsl(220,15%,20%)] text-emerald-200/80 font-display text-[10px] tracking-wider disabled:opacity-40 transition-colors border border-emerald-800/30"
               title="Marcar como activo"
             >
               <Check className="w-3 h-3" />
@@ -254,7 +255,7 @@ function DeckCard({ deck, isActive, busy, onPlay, onSetActive, onEdit, onDuplica
             <button
               onClick={onEdit}
               disabled={busy}
-              className="px-2 h-8 rounded-md bg-stone-700/70 hover:bg-stone-600/70 text-amber-200/90 transition-colors disabled:opacity-40"
+              className="px-2 h-8 rounded-md bg-[hsl(220,15%,15%)] hover:bg-[hsl(220,15%,20%)] text-emerald-200/80 transition-colors disabled:opacity-40 border border-emerald-800/30"
               title="Editar"
             >
               <Pencil className="w-3 h-3" />
@@ -264,7 +265,7 @@ function DeckCard({ deck, isActive, busy, onPlay, onSetActive, onEdit, onDuplica
             <button
               onClick={onDuplicate}
               disabled={busy}
-              className="px-2 h-8 rounded-md bg-stone-700/70 hover:bg-stone-600/70 text-amber-200/90 transition-colors disabled:opacity-40"
+              className="px-2 h-8 rounded-md bg-[hsl(220,15%,15%)] hover:bg-[hsl(220,15%,20%)] text-emerald-200/80 transition-colors disabled:opacity-40 border border-emerald-800/30"
               title="Duplicar"
             >
               {busy ? <Loader2 className="w-3 h-3 animate-spin" /> : <Copy className="w-3 h-3" />}
@@ -274,7 +275,7 @@ function DeckCard({ deck, isActive, busy, onPlay, onSetActive, onEdit, onDuplica
             <button
               onClick={onDelete}
               disabled={busy}
-              className="px-2 h-8 rounded-md bg-red-900/60 hover:bg-red-800/70 text-red-100 transition-colors disabled:opacity-40"
+              className="px-2 h-8 rounded-md bg-red-900/40 hover:bg-red-800/60 text-red-200 transition-colors disabled:opacity-40 border border-red-700/20"
               title="Eliminar"
             >
               <Trash2 className="w-3 h-3" />
