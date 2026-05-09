@@ -1,7 +1,7 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useGameLogic } from '@/hooks/useGameLogic';
-import { TABLE_MAX } from '@/constants/cards';
+import { TABLE_MAX, SKILLS } from '@/constants/cards';
 import BugCentral from './BugCentral';
 import GameCard from './GameCard';
 import CardBack from './CardBack';
@@ -19,7 +19,8 @@ interface GameBoardProps {
 type SelectionPhase =
   | { type: 'none' }
   | { type: 'card-selected'; cardId: string }
-  | { type: 'picking-target'; qaCardId: string };
+  | { type: 'picking-enemy'; cardId: string; actionType: 'attack-enemy' | 'skill'; skillIndex?: number }
+  | { type: 'picking-ally'; cardId: string; skillIndex: number };
 
 export default function GameBoard({ onExit, deckComposition, playerName = 'Jugador' }: GameBoardProps) {
   const game = useGameLogic(deckComposition);
@@ -62,21 +63,52 @@ export default function GameBoard({ onExit, deckComposition, playerName = 'Jugad
 
   const getActionsForCard = () => {
     if (!selectedCard) return [];
-    if (selectedCard.definition.tipo === 'programador') {
-      return [{ id: 'attack', label: `Atacar Bug (-${selectedCard.definition.potencia})`, description: 'Reduce la complejidad del Bug (pasa turno)' }];
+    if (!selectedCard.disponible) {
+      return [{ id: 'unavailable', label: 'Ya actuó este turno', description: 'Esta carta no puede actuar más en este turno' }];
     }
-    if (selectedCard.definition.tipo === 'qa') {
-      const isUsed = game.usedAbilityCards.includes(selectedCard.instanceId);
-      if (isUsed) {
-        return [{ id: 'already-used', label: 'Ya usada este turno', description: 'Solo puedes usar cada habilidad una vez por turno' }];
+    const actions: { id: string; label: string; description: string }[] = [];
+    const def = selectedCard.definition;
+    const hasEnergy = game.playerEnergy >= def.ataqueCoste;
+    // Basic attack — programadores attack bugs, QAs attack enemy cards
+    if (def.potencia > 0) {
+      if (def.tipo === 'programador') {
+        actions.push({
+          id: 'attack-bug',
+          label: `⚔️ Atacar Bug (-${def.potencia}❤️, -${def.ataqueCoste}⚡)`,
+          description: hasEnergy ? 'Reduce la complejidad del Bug.' : `⚠️ Necesitas ${def.ataqueCoste}⚡`,
+        });
       }
-      const hasTargets = game.botTable.some(c => c?.definition.tipo === 'programador');
-      if (hasTargets) {
-        return [{ id: 'qa-target', label: 'Eliminar carta rival', description: 'Elige un Programador del Bot (no pasa turno)' }];
+      if (def.tipo === 'qa') {
+        const hasEnemies = game.botTable.some(c => c !== null);
+        if (hasEnemies) {
+          actions.push({
+            id: 'attack-enemy',
+            label: `🎯 Atacar Carta Enemiga (-${def.ataqueCoste}⚡)`,
+            description: hasEnergy ? 'Aumenta el estrés de una carta rival.' : `⚠️ Necesitas ${def.ataqueCoste}⚡`,
+          });
+        }
       }
-      return [{ id: 'no-targets', label: 'Sin objetivos', description: 'El Bot no tiene Programadores en mesa' }];
     }
-    return [];
+    // Special skills
+    def.habilidades.forEach(([skillId, potencia, coste], idx) => {
+      const skill = SKILLS[skillId];
+      if (!skill) return;
+      if (skill.objetivo === 'carta_enemiga') {
+        const hasEnemyTargets = game.botTable.some((c) => c !== null);
+        if (!hasEnemyTargets) return;
+      }
+      if (skill.objetivo === 'carta_aliada') {
+        const hasAllyTargets = game.playerTable.some((c) => c !== null && c.instanceId !== selectedCard.instanceId);
+        if (!hasAllyTargets) return;
+      }
+      const canAfford = game.playerEnergy >= coste;
+      actions.push({
+        id: `skill-${skillId}-${idx}`,
+        label: `✨ ${skill.nombre} (Pot: ${potencia}, -${coste}⚡)`,
+        description: canAfford ? skill.descripcion : `⚠️ Necesitas ${coste}⚡`,
+      });
+    });
+    return actions;
   };
 
   const handleTableCardSelect = useCallback((cardId: string) => {
@@ -89,20 +121,45 @@ export default function GameBoard({ onExit, deckComposition, playerName = 'Jugad
   }, [isPlayerTurn, game.gamePhase, selection]);
 
   const handleBotCardSelect = useCallback((cardId: string) => {
-    if (selection.type !== 'picking-target') return;
-    game.playerUseQA(selection.qaCardId, cardId);
+    if (selection.type === 'picking-enemy') {
+      if (selection.actionType === 'attack-enemy') {
+        game.playerAttackEnemy(selection.cardId, cardId);
+      } else if (selection.actionType === 'skill' && selection.skillIndex !== undefined) {
+        game.playerUseSkill(selection.cardId, selection.skillIndex, cardId);
+      }
+      setSelection({ type: 'none' });
+    }
+  }, [selection, game]);
+
+  const handleAllyCardSelect = useCallback((cardId: string) => {
+    if (selection.type !== 'picking-ally') return;
+    game.playerUseSkill(selection.cardId, selection.skillIndex, cardId);
     setSelection({ type: 'none' });
   }, [selection, game]);
 
   const handleAction = useCallback((actionId: string) => {
     if (!selectedCard) return;
-    if (actionId === 'attack') {
+    if (actionId === 'attack-bug') {
       game.playerAttackBug(selectedCard.instanceId);
       setSelection({ type: 'none' });
-    } else if (actionId === 'qa-target') {
-      setSelection({ type: 'picking-target', qaCardId: selectedCard.instanceId });
-    } else if (actionId === 'no-targets' || actionId === 'already-used') {
+    } else if (actionId === 'attack-enemy') {
+      setSelection({ type: 'picking-enemy', cardId: selectedCard.instanceId, actionType: 'attack-enemy' });
+    } else if (actionId === 'unavailable') {
       setSelection({ type: 'none' });
+    } else if (actionId.startsWith('skill-')) {
+      const parts = actionId.split('-');
+      const skillId = Number(parts[1]);
+      const skillIndex = Number(parts[2]);
+      const skill = SKILLS[skillId];
+      if (!skill) { setSelection({ type: 'none' }); return; }
+      if (skill.objetivo === 'bug') {
+        game.playerUseSkill(selectedCard.instanceId, skillIndex);
+        setSelection({ type: 'none' });
+      } else if (skill.objetivo === 'carta_enemiga') {
+        setSelection({ type: 'picking-enemy', cardId: selectedCard.instanceId, actionType: 'skill', skillIndex });
+      } else if (skill.objetivo === 'carta_aliada') {
+        setSelection({ type: 'picking-ally', cardId: selectedCard.instanceId, skillIndex });
+      }
     }
   }, [selectedCard, game]);
 
@@ -212,7 +269,7 @@ export default function GameBoard({ onExit, deckComposition, playerName = 'Jugad
           }`}
         >
           {isPlayerTurn
-            ? selection.type === 'picking-target' ? '🎯 OBJETIVO' : `🟢 ${playerName.toUpperCase()}`
+            ? (selection.type === 'picking-enemy' || selection.type === 'picking-ally') ? '🎯 OBJETIVO' : `🟢 ${playerName.toUpperCase()}`
             : '🔴 RIVAL'}
         </motion.div>
 
@@ -256,7 +313,7 @@ export default function GameBoard({ onExit, deckComposition, playerName = 'Jugad
 
       {/* ===== Picking-target hint pill (only when choosing QA target) ===== */}
       <AnimatePresence>
-        {selection.type === 'picking-target' && (
+        {(selection.type === 'picking-enemy' || selection.type === 'picking-ally') && (
           <motion.div
             initial={{ opacity: 0, y: -8 }}
             animate={{ opacity: 1, y: 0 }}
@@ -264,7 +321,11 @@ export default function GameBoard({ onExit, deckComposition, playerName = 'Jugad
             className="absolute top-11 sm:top-16 left-1/2 -translate-x-1/2 z-20 max-w-[95%]"
           >
             <span className="text-[9px] sm:text-xs font-body text-amber-100/90 bg-black/50 backdrop-blur-sm px-2 sm:px-4 py-1 sm:py-1.5 rounded-full border border-amber-500/40 whitespace-nowrap">
-              👆 Elige carta rival
+              {selection.type === 'picking-ally'
+                ? '👆 Elige carta aliada para aplicar el efecto'
+                : selection.type === 'picking-enemy' && selection.actionType === 'attack-enemy'
+                  ? '👆 Elige carta rival para atacar'
+                  : '👆 Elige carta rival para aplicar la habilidad'}
             </span>
           </motion.div>
         )}
@@ -312,7 +373,7 @@ export default function GameBoard({ onExit, deckComposition, playerName = 'Jugad
             Bot
           </div>
           <div className={`flex items-end justify-center gap-1 sm:gap-3 min-h-[5rem] sm:min-h-[7rem] md:min-h-[10rem] px-1 sm:px-4 transition-all duration-300 ${
-            selection.type === 'picking-target' ? 'ring-2 ring-red-500/50 rounded-xl bg-red-900/10' : ''
+            selection.type === 'picking-enemy' ? 'ring-2 ring-red-500/50 rounded-xl bg-red-900/10' : ''
           }`}>
             {game.botTable.map((card, i) => (
               <div key={`bot-slot-${i}`} className="relative w-[3.6rem] h-[5rem] sm:w-[5rem] sm:h-[7rem] md:w-[7rem] md:h-[9.8rem] flex items-end justify-center">
@@ -323,8 +384,8 @@ export default function GameBoard({ onExit, deckComposition, playerName = 'Jugad
                       isOpponent
                       index={i}
                       selected={false}
-                      disabled={selection.type !== 'picking-target'}
-                      onSelect={selection.type === 'picking-target' ? handleBotCardSelect : undefined}
+                      disabled={selection.type !== 'picking-enemy'}
+                      onSelect={selection.type === 'picking-enemy' ? handleBotCardSelect : undefined}
                     />
                     {game.botHighlightId === card.instanceId && (
                       <motion.div
@@ -374,10 +435,13 @@ export default function GameBoard({ onExit, deckComposition, playerName = 'Jugad
                       <GameCard
                         card={card!}
                         index={i}
-                        disabled={!isPlayerTurn || selection.type === 'picking-target'}
+                        disabled={
+                          !isPlayerTurn
+                          || selection.type === 'picking-enemy'
+                          || (selection.type === 'picking-ally' && selection.cardId === card!.instanceId)
+                        }
                         selected={selection.type === 'card-selected' && selection.cardId === card!.instanceId}
-                        onSelect={handleTableCardSelect}
-                        isUsedThisTurn={game.usedAbilityCards.includes(card!.instanceId)}
+                        onSelect={selection.type === 'picking-ally' ? handleAllyCardSelect : handleTableCardSelect}
                       />
                       {game.playerTargetHighlightId === card!.instanceId && (
                         <motion.div

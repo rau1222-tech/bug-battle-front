@@ -1,7 +1,7 @@
-import { CardDefinition } from '@/constants/cards';
+import { CardTemplate } from '@/constants/cards';
 
 interface Props {
-  def: CardDefinition;
+  def: CardTemplate;
   quantity?: number;
   onClick?: () => void;
   disabled?: boolean;

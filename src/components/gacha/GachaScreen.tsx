@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import BackButton from '@/components/ui/BackButton';
-import { CARD_DEFINITIONS, type CardDefinition } from '@/constants/cards';
+import { CARD_DEFINITIONS, type CardTemplate } from '@/constants/cards';
 import {
   useCollection,
   openPack,
@@ -22,7 +22,7 @@ type Phase = 'shop' | 'opening' | 'reveal';
 export default function GachaScreen({ onBack }: Props) {
   const { collection, coins, addCards, spendCoins } = useCollection();
   const [phase, setPhase] = useState<Phase>('shop');
-  const [pulled, setPulled] = useState<CardDefinition[]>([]);
+  const [pulled, setPulled] = useState<CardTemplate[]>([]);
   const [revealedIdx, setRevealedIdx] = useState(-1);
 
   const handleBuyPack = () => {

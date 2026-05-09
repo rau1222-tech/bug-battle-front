@@ -10,10 +10,9 @@ interface GameCardProps {
   selected?: boolean;
   onSelect?: (cardId: string) => void;
   inHand?: boolean;
-  isUsedThisTurn?: boolean;
 }
 
-export default function GameCard({ card, isOpponent = false, index = 0, disabled = false, selected = false, onSelect, inHand = false, isUsedThisTurn = false }: GameCardProps) {
+export default function GameCard({ card, isOpponent = false, index = 0, disabled = false, selected = false, onSelect, inHand = false }: GameCardProps) {
   const { definition } = card;
   const isProgramador = definition.tipo === 'programador';
 
@@ -65,7 +64,7 @@ export default function GameCard({ card, isOpponent = false, index = 0, disabled
       )}
 
       {/* Used this turn indicator */}
-      {isUsedThisTurn && (
+      {!inHand && !card.disponible && (
         <div className="absolute -inset-1 rounded-xl border-2 border-gray-400/40 pointer-events-none bg-black/20" />
       )}
 
@@ -110,6 +109,26 @@ export default function GameCard({ card, isOpponent = false, index = 0, disabled
           {'⚡'.repeat(definition.coste)}
         </span>
       </div>
+
+      {/* STRESS INDICATOR — only when on the table */}
+      {!inHand && definition.estresLimite > 0 && (
+        <div className="absolute top-[11%] left-[8%] right-[8%] flex flex-col items-center gap-[1px] pointer-events-none">
+          <span className={`text-[4px] sm:text-[5px] md:text-[6.5px] font-display font-bold leading-none ${
+            card.estresActual === 0 ? 'text-emerald-600' : card.estresActual >= definition.estresLimite - 1 ? 'text-red-500' : 'text-amber-500'
+          }`}>
+            ❤️ {card.estresActual}/{definition.estresLimite}
+          </span>
+          <div className="w-full h-[2px] sm:h-[3px] rounded-full overflow-hidden bg-stone-700/40">
+            <div
+              className="h-full rounded-full transition-all duration-300"
+              style={{
+                width: `${Math.min(100, (card.estresActual / definition.estresLimite) * 100)}%`,
+                backgroundColor: card.estresActual === 0 ? 'transparent' : card.estresActual >= definition.estresLimite - 1 ? '#ef4444' : '#f59e0b',
+              }}
+            />
+          </div>
+        </div>
+      )}
     </motion.div>
   );
 }

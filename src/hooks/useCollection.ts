@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { CARD_DEFINITIONS, type CardDefinition } from '@/constants/cards';
+import { CARD_DEFINITIONS, type CardTemplate } from '@/constants/cards';
 
 /** card_id → total copies owned */
 export type Collection = Record<string, number>;
@@ -17,7 +17,7 @@ export const CARDS_PER_PACK = 3;
 /* ── Rarity tiers based on card power ── */
 type Rarity = 'comun' | 'raro' | 'epico';
 
-export function getRarity(def: CardDefinition): Rarity {
+export function getRarity(def: CardTemplate): Rarity {
   if (def.potencia >= 3) return 'epico';
   if (def.potencia >= 2) return 'raro';
   return 'comun';
@@ -44,9 +44,9 @@ export const RARITY_GLOW: Record<Rarity, string> = {
 /* ── Weight table (higher = more likely) ── */
 const WEIGHT: Record<Rarity, number> = { comun: 60, raro: 30, epico: 10 };
 
-function pickRandomCard(): CardDefinition {
+function pickRandomCard(): CardTemplate {
   // Build weighted pool
-  const pool: CardDefinition[] = [];
+  const pool: CardTemplate[] = [];
   for (const def of CARD_DEFINITIONS) {
     const r = getRarity(def);
     const w = WEIGHT[r];
@@ -56,8 +56,8 @@ function pickRandomCard(): CardDefinition {
 }
 
 /** Open a pack → returns array of cards pulled */
-export function openPack(): CardDefinition[] {
-  const results: CardDefinition[] = [];
+export function openPack(): CardTemplate[] {
+  const results: CardTemplate[] = [];
   for (let i = 0; i < CARDS_PER_PACK; i++) {
     results.push(pickRandomCard());
   }
@@ -101,7 +101,7 @@ export function useCollection() {
   useEffect(() => saveCollection(collection), [collection]);
   useEffect(() => saveCoins(coins), [coins]);
 
-  const addCards = useCallback((cards: CardDefinition[]) => {
+  const addCards = useCallback((cards: CardTemplate[]) => {
     setCollection((prev) => {
       const next = { ...prev };
       for (const card of cards) {
