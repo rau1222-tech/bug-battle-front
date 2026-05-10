@@ -1,5 +1,18 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
-import { CardInstance, SKILLS, createDeck, BUG_MAX_COMPLEXITY, INITIAL_DRAW, TABLE_MAX, MAX_ENERGY_CAP, ENERGY_PER_TURN, ENERGY_BONUS_HIT, type DeckComposition } from '@/constants/cards';
+import {
+  CardInstance,
+  SKILLS,
+  createDeck,
+  BUG_MAX_COMPLEXITY,
+  INITIAL_DRAW,
+  TABLE_MAX,
+  MAX_ENERGY_CAP,
+  ENERGY_PER_TURN,
+  ENERGY_BONUS_HIT,
+  calcularPotenciaReal,
+  type DeckComposition,
+  type Effect,
+} from '@/constants';
 
 export type BugState = 'idle' | 'hit' | 'death';
 export type GamePhase = 'playing' | 'round-end' | 'game-over';
@@ -48,6 +61,16 @@ function drawFromDeck(deck: CardInstance[], count: number) {
 
 function emptyTable(): (CardInstance | null)[] {
   return Array.from({ length: TABLE_MAX }, () => null);
+}
+
+function tickEfectos(table: (CardInstance | null)[]): (CardInstance | null)[] {
+  return table.map((card) => {
+    if (!card) return null;
+    const efectosActivos = card.efectosActivos
+      .map((efecto) => ({ ...efecto, turnosRestantes: efecto.turnosRestantes - 1 }))
+      .filter((efecto) => efecto.turnosRestantes > 0);
+    return { ...card, efectosActivos };
+  });
 }
 
 function initState(playerComp?: DeckComposition[]): GameState {
@@ -157,12 +180,13 @@ export function useGameLogic(playerComposition?: DeckComposition[]) {
       if (!card) return s;
       if (card.definition.tipo !== 'programador') return s;
       if (!card.disponible) return { ...s, message: '⚠️ Esta carta ya actuó este turno.' };
-      if (card.definition.potencia === 0) return s;
+      const potenciaReal = calcularPotenciaReal(card);
+      if (potenciaReal === 0) return s;
       if (s.playerEnergy < card.definition.ataqueCoste) {
         return { ...s, message: `⚠️ Necesitas ${card.definition.ataqueCoste}⚡ para atacar.` };
       }
 
-      const newHP = Math.max(0, s.bugComplexity - card.definition.potencia);
+      const newHP = Math.max(0, s.bugComplexity - potenciaReal);
       const end = checkRoundEnd(newHP, 'player', s);
       if (end) return { ...s, ...end, playerTable: markUsed(s.playerTable, cardId) };
       return {
@@ -172,7 +196,7 @@ export function useGameLogic(playerComposition?: DeckComposition[]) {
         lastAttacker: 'player',
         playerEnergy: s.playerEnergy - card.definition.ataqueCoste,
         playerTable: markUsed(s.playerTable, cardId),
-        message: `⚔️ ${card.definition.nombre} atacó al Bug! ${newHP}/${BUG_MAX_COMPLEXITY} (-${card.definition.ataqueCoste}⚡)`,
+        message: `⚔️ ${card.definition.nombre} atacó con ${potenciaReal} de daño! Bug: ${newHP}/${BUG_MAX_COMPLEXITY} (-${card.definition.ataqueCoste}⚡)`,
       };
     });
   }, [checkRoundEnd]);
@@ -185,16 +209,17 @@ export function useGameLogic(playerComposition?: DeckComposition[]) {
       if (!attacker) return s;
       if (attacker.definition.tipo !== 'qa') return s;
       if (!attacker.disponible) return { ...s, message: '⚠️ Esta carta ya actuó este turno.' };
-      if (attacker.definition.potencia === 0) return s;
+      const potenciaReal = calcularPotenciaReal(attacker);
+      if (potenciaReal === 0) return s;
       if (s.playerEnergy < attacker.definition.ataqueCoste) {
         return { ...s, message: `⚠️ Necesitas ${attacker.definition.ataqueCoste}⚡ para atacar.` };
       }
       const targetIdx = s.botTable.findIndex((c) => c?.instanceId === targetId);
       if (targetIdx < 0) return s;
       const target = s.botTable[targetIdx]!;
-      const newEstrés = target.estresActual + attacker.definition.potencia;
+      const newEstres = target.estresActual + potenciaReal;
       const newBotTable = [...s.botTable];
-      if (newEstrés >= target.definition.estresLimite) {
+      if (newEstres >= target.definition.estresLimite) {
         newBotTable[targetIdx] = null;
         return {
           ...s,
@@ -204,13 +229,13 @@ export function useGameLogic(playerComposition?: DeckComposition[]) {
           message: `💥 ${attacker.definition.nombre} destruyó a ${target.definition.nombre}! (-${attacker.definition.ataqueCoste}⚡)`,
         };
       }
-      newBotTable[targetIdx] = { ...target, estresActual: newEstrés };
+      newBotTable[targetIdx] = { ...target, estresActual: newEstres };
       return {
         ...s,
         botTable: newBotTable,
         playerEnergy: s.playerEnergy - attacker.definition.ataqueCoste,
         playerTable: markUsed(s.playerTable, attackerId),
-        message: `🎯 ${attacker.definition.nombre} golpeó a ${target.definition.nombre}! Estrés: ${newEstrés}/${target.definition.estresLimite} (-${attacker.definition.ataqueCoste}⚡)`,
+        message: `🎯 ${attacker.definition.nombre} atacó con ${potenciaReal} de daño a ${target.definition.nombre}! Estrés: ${newEstres}/${target.definition.estresLimite} (-${attacker.definition.ataqueCoste}⚡)`,
       };
     });
   }, []);
@@ -224,36 +249,34 @@ export function useGameLogic(playerComposition?: DeckComposition[]) {
       if (!card.disponible) return { ...s, message: '⚠️ Esta carta ya actuó este turno.' };
       const habilidad = card.definition.habilidades[skillIndex];
       if (!habilidad) return s;
-      const [skillId, potencia, coste] = habilidad;
+      const [skillId, potencia, coste, duracion] = habilidad;
       const skill = SKILLS[skillId];
       if (!skill) return s;
       if (s.playerEnergy < coste) {
         return { ...s, message: `⚠️ Necesitas ${coste}⚡ para usar ${skill.nombre}.` };
       }
 
-      // Bug damage skill
-      if (skill.objetivo === 'bug') {
-        const newHP = Math.max(0, s.bugComplexity - potencia);
-        const end = checkRoundEnd(newHP, 'player', s);
-        if (end) return { ...s, ...end, playerTable: markUsed(s.playerTable, cardId), playerEnergy: s.playerEnergy - coste };
-        return {
-          ...s,
-          bugComplexity: newHP,
-          bugState: 'hit',
-          playerEnergy: s.playerEnergy - coste,
-          playerTable: markUsed(s.playerTable, cardId),
-          message: `✨ ${skill.nombre}: ${card.definition.nombre} infligió ${potencia} al Bug! ${newHP}/${BUG_MAX_COMPLEXITY} (-${coste}⚡)`,
-        };
-      }
-
-      // Enemy card skill
-      if (skill.objetivo === 'carta_enemiga') {
-        if (!targetId) return s;
-        const targetIdx = s.botTable.findIndex((c) => c?.instanceId === targetId);
-        if (targetIdx < 0) return s;
-        const target = s.botTable[targetIdx]!;
-        // QA Testing (id 4): return enemy card to bot hand
-        if (skillId === 4) {
+      switch (skill.accionTipo) {
+        case 'DANIO_DIRECTO': {
+          if (skill.objetivo !== 'bug') return s;
+          const newHP = Math.max(0, s.bugComplexity - potencia);
+          const end = checkRoundEnd(newHP, 'player', s);
+          if (end) return { ...s, ...end, playerTable: markUsed(s.playerTable, cardId), playerEnergy: s.playerEnergy - coste };
+          return {
+            ...s,
+            bugComplexity: newHP,
+            bugState: 'hit',
+            playerEnergy: s.playerEnergy - coste,
+            playerTable: markUsed(s.playerTable, cardId),
+            message: `✨ ${skill.nombre}: ${card.definition.nombre} infligió ${potencia} al Bug! ${newHP}/${BUG_MAX_COMPLEXITY} (-${coste}⚡)`,
+          };
+        }
+        case 'DEVOLVER_MANO': {
+          if (skill.objetivo !== 'carta_enemiga') return s;
+          if (!targetId) return s;
+          const targetIdx = s.botTable.findIndex((c) => c?.instanceId === targetId);
+          if (targetIdx < 0) return s;
+          const target = s.botTable[targetIdx]!;
           const newBotTable = [...s.botTable];
           newBotTable[targetIdx] = null;
           return {
@@ -265,31 +288,31 @@ export function useGameLogic(playerComposition?: DeckComposition[]) {
             message: `🔍 ${skill.nombre}: ${target.definition.nombre} devuelta a la mano del rival! (-${coste}⚡)`,
           };
         }
-        return s;
-      }
-
-      // Ally card skill
-      if (skill.objetivo === 'carta_aliada') {
-        if (!targetId) return s;
-        const targetIdx = s.playerTable.findIndex((c) => c?.instanceId === targetId);
-        if (targetIdx < 0) return s;
-        const target = s.playerTable[targetIdx]!;
-        // Par Programming (id 3): add buff_ataque state to ally
-        if (skillId === 3) {
-          const buffed = { ...target, estados: new Set([...target.estados, 'buff_ataque']) };
+        case 'APLICAR_ESTADO': {
+          if (skill.objetivo !== 'carta_aliada') return s;
+          if (!targetId) return s;
+          if (!skill.efectoTipo) return s;
+          const targetIdx = s.playerTable.findIndex((c) => c?.instanceId === targetId);
+          if (targetIdx < 0) return s;
+          const target = s.playerTable[targetIdx]!;
+          const nuevoEfecto: Effect = {
+            tipo: skill.efectoTipo,
+            valor: potencia,
+            turnosRestantes: duracion || 1,
+          };
+          const buffed = { ...target, efectosActivos: [...target.efectosActivos, nuevoEfecto] };
           const newPlayerTable = [...s.playerTable];
           newPlayerTable[targetIdx] = buffed;
           return {
             ...s,
             playerTable: markUsed(newPlayerTable, cardId),
             playerEnergy: s.playerEnergy - coste,
-            message: `🤝 ${skill.nombre}: ${target.definition.nombre} recibe buff de ataque este turno! (-${coste}⚡)`,
+            message: `🤝 ${skill.nombre}: ${target.definition.nombre} recibe ${skill.efectoTipo} +${potencia} por ${duracion || 1} turno(s). (-${coste}⚡)`,
           };
         }
-        return s;
+        default:
+          return s;
       }
-
-      return s;
     });
   }, [checkRoundEnd]);
 
@@ -301,7 +324,8 @@ export function useGameLogic(playerComposition?: DeckComposition[]) {
         ...s,
         turn: 'bot',
         isFirstTurn: false,
-        playerTable: s.playerTable.map((c) => c ? { ...c, disponible: true } : null),
+        playerTable: tickEfectos(s.playerTable).map((c) => c ? { ...c, disponible: true } : null),
+        botTable: tickEfectos(s.botTable),
         message: '⏭️ Turno saltado — Turno del Bot...',
       };
     });
@@ -405,7 +429,7 @@ export function useGameLogic(playerComposition?: DeckComposition[]) {
         const qa = qas[0];
         const skillTuple = qa.definition.habilidades[0];
         const skillCoste = skillTuple?.[2] ?? 1;
-        const bestIdx = playerProgsIdx.sort((a, b) => b.c!.definition.potencia - a.c!.definition.potencia)[0].i;
+        const bestIdx = playerProgsIdx.sort((a, b) => calcularPotenciaReal(b.c!) - calcularPotenciaReal(a.c!))[0].i;
         const target = s0.playerTable[bestIdx]!;
 
         // 3a: highlight QA
@@ -456,7 +480,7 @@ export function useGameLogic(playerComposition?: DeckComposition[]) {
       schedule(phaseCursor, () => {
         setState((s) => {
           if (s.turn !== 'bot' || s.gamePhase !== 'playing') return s;
-          const progs = s.botTable.filter((c): c is CardInstance => c !== null && c.disponible && c.definition.tipo === 'programador' && c.definition.potencia > 0 && s.botEnergy >= c.definition.ataqueCoste);
+          const progs = s.botTable.filter((c): c is CardInstance => c !== null && c.disponible && c.definition.tipo === 'programador' && calcularPotenciaReal(c) > 0 && s.botEnergy >= c.definition.ataqueCoste);
           if (progs.length === 0) {
             return {
               ...s,
@@ -464,14 +488,15 @@ export function useGameLogic(playerComposition?: DeckComposition[]) {
               playerTargetHighlightId: null,
               turn: 'player',
               isFirstTurn: false,
-              playerTable: s.playerTable.map((c) => c ? { ...c, disponible: true } : null),
+              playerTable: tickEfectos(s.playerTable).map((c) => c ? { ...c, disponible: true } : null),
+              botTable: tickEfectos(s.botTable),
               message: `🤖 Bot pasa — 🎯 Tu turno`,
             };
           }
           const sorted = [...progs].sort((a, b) =>
             s.bugComplexity <= 3
-              ? b.definition.potencia - a.definition.potencia
-              : a.definition.potencia - b.definition.potencia
+              ? calcularPotenciaReal(b) - calcularPotenciaReal(a)
+              : calcularPotenciaReal(a) - calcularPotenciaReal(b)
           );
           const card = sorted[0];
           return {
@@ -486,15 +511,15 @@ export function useGameLogic(playerComposition?: DeckComposition[]) {
       schedule(phaseCursor, () => {
         setState((s) => {
           if (s.turn !== 'bot' || s.gamePhase !== 'playing') return s;
-          const progs = s.botTable.filter((c): c is CardInstance => c !== null && c.disponible && c.definition.tipo === 'programador' && c.definition.potencia > 0 && s.botEnergy >= c.definition.ataqueCoste);
+          const progs = s.botTable.filter((c): c is CardInstance => c !== null && c.disponible && c.definition.tipo === 'programador' && calcularPotenciaReal(c) > 0 && s.botEnergy >= c.definition.ataqueCoste);
           if (progs.length === 0) return s;
           const sorted = [...progs].sort((a, b) =>
             s.bugComplexity <= 3
-              ? b.definition.potencia - a.definition.potencia
-              : a.definition.potencia - b.definition.potencia
+              ? calcularPotenciaReal(b) - calcularPotenciaReal(a)
+              : calcularPotenciaReal(a) - calcularPotenciaReal(b)
           );
           const card = sorted[0];
-          const newHP = Math.max(0, s.bugComplexity - card.definition.potencia);
+          const newHP = Math.max(0, s.bugComplexity - calcularPotenciaReal(card));
           const end = checkRoundEnd(newHP, 'bot', s);
           if (end) return { ...s, ...end, botHighlightId: null, botTable: s.botTable.map((c) => c?.instanceId === card.instanceId ? { ...c, disponible: false } : c) };
           return {
@@ -502,13 +527,13 @@ export function useGameLogic(playerComposition?: DeckComposition[]) {
             bugComplexity: newHP,
             bugState: 'hit',
             botEnergy: s.botEnergy - card.definition.ataqueCoste,
-            botTable: s.botTable.map((c) => c?.instanceId === card.instanceId ? { ...c, disponible: false } : c),
+            botTable: tickEfectos(s.botTable.map((c) => c?.instanceId === card.instanceId ? { ...c, disponible: false } : c)),
             botHighlightId: null,
             playerTargetHighlightId: null,
             turn: 'player',
             lastAttacker: 'bot',
             isFirstTurn: false,
-            playerTable: s.playerTable.map((c) => c ? { ...c, disponible: true } : null),
+            playerTable: tickEfectos(s.playerTable).map((c) => c ? { ...c, disponible: true } : null),
             message: `⚔️ Bot atacó con ${card.definition.nombre}! Bug: ${newHP}/${BUG_MAX_COMPLEXITY} — 🎯 Tu turno`,
           };
         });

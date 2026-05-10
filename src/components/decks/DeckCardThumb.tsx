@@ -1,4 +1,4 @@
-import { CardTemplate } from '@/constants/cards';
+import { CardTemplate } from '@/constants';
 
 interface Props {
   def: CardTemplate;

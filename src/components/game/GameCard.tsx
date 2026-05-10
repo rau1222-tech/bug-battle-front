@@ -1,5 +1,5 @@
 import { motion } from 'framer-motion';
-import { CardInstance } from '@/constants/cards';
+import { CardInstance, calcularPotenciaReal } from '@/constants';
 import cardBase from '@/assets/Base-Carta.png';
 
 interface GameCardProps {
@@ -96,11 +96,19 @@ export default function GameCard({ card, isOpponent = false, index = 0, disabled
 
       {/* BOTTOM LEFT: Power */}
       <div className="absolute bottom-[3%] left-[10%] w-[28%] h-[8%] flex items-center justify-center pointer-events-none">
-        <span className={`text-[5px] sm:text-[6.5px] md:text-[8px] font-display font-bold ${
-          isProgramador ? 'text-stone-800' : 'text-red-600'
-        }`}>
-          {isProgramador ? `${definition.potencia}` : 'QA'}
-        </span>
+        {isProgramador ? (
+          <span className={`text-[5px] sm:text-[6.5px] md:text-[8px] font-display font-bold transition-colors ${
+            calcularPotenciaReal(card) > definition.potencia
+              ? 'text-emerald-500'
+              : calcularPotenciaReal(card) < definition.potencia
+                ? 'text-red-500'
+                : 'text-stone-800'
+          }`}>
+            {calcularPotenciaReal(card)}
+          </span>
+        ) : (
+          <span className="text-[5px] sm:text-[6.5px] md:text-[8px] font-display font-bold text-red-600">QA</span>
+        )}
       </div>
 
       {/* BOTTOM RIGHT: Cost */}
@@ -109,6 +117,17 @@ export default function GameCard({ card, isOpponent = false, index = 0, disabled
           {'⚡'.repeat(definition.coste)}
         </span>
       </div>
+
+      {/* EFFECTS INDICATOR — show if card has active effects */}
+      {!inHand && card.efectosActivos.length > 0 && (
+        <motion.div
+          initial={{ opacity: 0, scale: 0 }}
+          animate={{ opacity: 1, scale: 1 }}
+          className="absolute top-[5%] right-[8%] pointer-events-none"
+        >
+          <span className="text-base sm:text-xl md:text-2xl animate-pulse">✨</span>
+        </motion.div>
+      )}
 
       {/* STRESS INDICATOR — only when on the table */}
       {!inHand && definition.estresLimite > 0 && (

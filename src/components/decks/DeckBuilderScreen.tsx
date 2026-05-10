@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { Save, Loader2, Plus, Minus } from 'lucide-react';
 import BackButton from '@/components/ui/BackButton';
-import { CARD_DEFINITIONS, DECK_SIZE, type CardType } from '@/constants/cards';
+import { CARD_DEFINITIONS, DECK_SIZE, type CardType } from '@/constants';
 import {
   createDeckRecord,
   updateDeckRecord,

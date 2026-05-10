@@ -1,17 +1,4 @@
-export type SkillTarget = 'bug' | 'carta_enemiga' | 'carta_aliada';
-
-export interface Skill {
-  id: number;
-  nombre: string;
-  descripcion: string;
-  objetivo: SkillTarget;
-}
-
-export const SKILLS: Record<number, Skill> = {
-  3: { id: 3, nombre: 'Par Programming', descripcion: 'Aumenta la potencia de una carta aliada este turno.', objetivo: 'carta_aliada'  },
-  4: { id: 4, nombre: 'QA Testing',      descripcion: 'Devuelve una carta programadora enemiga a la mano del rival.', objetivo: 'carta_enemiga' },
-  5: { id: 5, nombre: 'Automatización',  descripcion: 'Inflige daño extra al bug igual a la potencia indicada.', objetivo: 'bug'           },
-};
+import type { Effect } from './effects';
 
 export type CardType = 'programador' | 'qa';
 
@@ -25,8 +12,8 @@ export interface CardTemplate {
   estresLimite: number;
   descripcion: string;
   emoji: string;
-  /** Cada tupla: [id_habilidad, potencia, coste] */
-  habilidades: [number, number, number][];
+  /** Cada tupla: [id_habilidad, potencia, coste, duracion] */
+  habilidades: [number, number, number, number][];
 }
 
 export const CARD_DEFINITIONS: CardTemplate[] = [
@@ -64,7 +51,7 @@ export const CARD_DEFINITIONS: CardTemplate[] = [
     estresLimite: 4,
     descripcion: 'Veterano cazador de bugs.',
     emoji: '🧠',
-    habilidades: [[3, 2, 2]],
+    habilidades: [[3, 2, 2, 1]],
   },
   {
     id: 'fullstack',
@@ -76,7 +63,7 @@ export const CARD_DEFINITIONS: CardTemplate[] = [
     estresLimite: 3,
     descripcion: 'Ataca bugs en frontend y backend.',
     emoji: '⚡',
-    habilidades: [[3, 1, 1]],
+    habilidades: [[3, 1, 1, 1]],
   },
   {
     id: 'devops',
@@ -88,7 +75,7 @@ export const CARD_DEFINITIONS: CardTemplate[] = [
     estresLimite: 2,
     descripcion: 'Automatiza la destrucción de bugs.',
     emoji: '🔧',
-    habilidades: [[5, 2, 2]],
+    habilidades: [[5, 2, 2, 0]],
   },
   {
     id: 'intern',
@@ -112,7 +99,7 @@ export const CARD_DEFINITIONS: CardTemplate[] = [
     estresLimite: 5,
     descripcion: 'Diseña la solución desde la raíz.',
     emoji: '🏗️',
-    habilidades: [[3, 3, 0]],
+    habilidades: [[3, 3, 0, 1]],
   },
   {
     id: 'qa-tester',
@@ -124,7 +111,7 @@ export const CARD_DEFINITIONS: CardTemplate[] = [
     estresLimite: 2,
     descripcion: 'Devuelve un programador rival a su mano.',
     emoji: '🔍',
-    habilidades: [[4, 0, 1]],
+    habilidades: [[4, 0, 1, 0]],
   },
   {
     id: 'qa-lead',
@@ -136,7 +123,7 @@ export const CARD_DEFINITIONS: CardTemplate[] = [
     estresLimite: 3,
     descripcion: 'Limpia la mesa del rival con autoridad.',
     emoji: '🛡️',
-    habilidades: [[4, 0, 2]],
+    habilidades: [[4, 0, 2, 0]],
   },
 ];
 
@@ -152,8 +139,18 @@ export interface CardInstance {
   instanceId: string;
   definition: CardTemplate;
   estresActual: number;
-  estados: Set<string>;
+  efectosActivos: Effect[];
   disponible: boolean;
+}
+
+export function calcularPotenciaReal(instance: CardInstance): number {
+  const base = instance.definition.potencia;
+  const delta = instance.efectosActivos.reduce((acc, effect) => {
+    if (effect.tipo === 'buff_ataque') return acc + effect.valor;
+    if (effect.tipo === 'debuff_ataque') return acc - effect.valor;
+    return acc;
+  }, 0);
+  return Math.max(0, base + delta);
 }
 
 export interface DeckComposition {
@@ -176,14 +173,14 @@ export function createDeck(composition?: DeckComposition[]): CardInstance[] {
       const def = defMap.get(entry.card_id);
       if (!def) continue;
       for (let i = 0; i < entry.quantity; i++) {
-        deck.push({ instanceId: `${def.id}-${counter++}`, definition: def, estresActual: 0, estados: new Set(), disponible: true });
+        deck.push({ instanceId: `${def.id}-${counter++}`, definition: def, estresActual: 0, efectosActivos: [], disponible: true });
       }
     }
   } else {
     while (deck.length < DECK_SIZE) {
       for (const def of CARD_DEFINITIONS) {
         if (deck.length >= DECK_SIZE) break;
-        deck.push({ instanceId: `${def.id}-${counter++}`, definition: def, estresActual: 0, estados: new Set(), disponible: true });
+        deck.push({ instanceId: `${def.id}-${counter++}`, definition: def, estresActual: 0, efectosActivos: [], disponible: true });
       }
     }
   }

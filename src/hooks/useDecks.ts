@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
-import { CARD_DEFINITIONS, DECK_SIZE } from '@/constants/cards';
+import { CARD_DEFINITIONS, DECK_SIZE } from '@/constants';
 
 export interface DeckCardEntry {
   card_id: string;

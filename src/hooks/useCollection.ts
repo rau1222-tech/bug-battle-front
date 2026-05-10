@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { CARD_DEFINITIONS, type CardTemplate } from '@/constants/cards';
+import { CARD_DEFINITIONS, type CardTemplate } from '@/constants';
 
 /** card_id → total copies owned */
 export type Collection = Record<string, number>;

@@ -1,7 +1,7 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useGameLogic } from '@/hooks/useGameLogic';
-import { TABLE_MAX, SKILLS } from '@/constants/cards';
+import { TABLE_MAX, SKILLS } from '@/constants';
 import BugCentral from './BugCentral';
 import GameCard from './GameCard';
 import CardBack from './CardBack';

@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import BackButton from '@/components/ui/BackButton';
-import { CARD_DEFINITIONS, type CardTemplate } from '@/constants/cards';
+import { CARD_DEFINITIONS, type CardTemplate } from '@/constants';
 import {
   useCollection,
   openPack,

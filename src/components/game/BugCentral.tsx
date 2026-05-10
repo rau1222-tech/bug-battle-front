@@ -1,6 +1,6 @@
 import { motion, AnimatePresence } from 'framer-motion';
 import { BugState } from '@/hooks/useGameLogic';
-import { BUG_MAX_COMPLEXITY } from '@/constants/cards';
+import { BUG_MAX_COMPLEXITY } from '@/constants';
 import { useRef, useEffect } from 'react';
 
 interface BugCentralProps {

@@ -54,14 +54,14 @@ Una partida consta de **3 rondas** (best of 3). Cada ronda tiene un **Bug** con 
 | `coste` | Energía para colocar la carta en el tablero |
 | `ataqueCoste` | Energía para ejecutar el ataque básico |
 | `estresLimite` | Estrés máximo que aguanta; si lo alcanza, la carta es destruida |
-| `habilidades` | Array de tuplas `[skillId, potencia, coste]` — habilidades especiales |
+| `habilidades` | Array de tuplas `[skillId, potencia, coste, duracion]` — habilidades especiales con duración |
 
 ### Carta en juego (CardInstance)
 
 | Campo | Descripción |
 |---|---|
 | `estresActual` | Inicia en 0. Aumenta cuando recibe ataques de cartas QA enemigas |
-| `estados` | `Set<string>` para efectos temporales (ej: `buff_ataque`) |
+| `efectosActivos` | Array de efectos temporales activos (ej: `{ tipo: 'buff_ataque', valor: 2, turnosRestantes: 1 }`) |
 | `disponible` | `true` al inicio de cada turno; pasa a `false` tras actuar |
 
 ---
@@ -76,13 +76,13 @@ Una partida consta de **3 rondas** (best of 3). Cada ronda tiene un **Bug** con 
 
 ## Habilidades especiales
 
-Las habilidades están definidas en un catálogo centralizado (`SKILLS`). Cada carta puede tener 0 o más habilidades referenciadas por tupla `[skillId, potencia, coste]`.
+Las habilidades están definidas en un catálogo centralizado (`SKILLS`). Cada carta puede tener 0 o más habilidades referenciadas por tupla `[skillId, potencia, coste, duracion]`.
 
-| ID | Nombre | Objetivo | Efecto actual |
-|---|---|---|---|
-| 3 | Par Programming | `carta_aliada` | Añade el estado `buff_ataque` al aliado seleccionado |
-| 4 | QA Testing | `carta_enemiga` | Devuelve una carta enemiga a la mano del rival |
-| 5 | Automatización | `bug` | Inflige daño directo al bug igual a la `potencia` de la tupla |
+| ID | Nombre | Objetivo | Efecto | Duración |
+|---|---|---|---|---|
+| 3 | Par Programming | `carta_aliada` | Buff de ataque: suma `potencia` a la potencia efectiva del aliado | 1 turno |
+| 4 | QA Testing | `carta_enemiga` | Devuelve una carta enemiga a la mano del rival | Inmediato (0) |
+| 5 | Automatización | `bug` | Inflige daño directo al bug igual a la `potencia` de la tupla | Inmediato (0) |
 
 ### Restricciones de activación
 
@@ -98,13 +98,13 @@ Las habilidades están definidas en un catálogo centralizado (`SKILLS`). Cada c
 |---|---|---|---|---|---|---|
 | Junior Dev 👶 | Programador | 1 | 1 | 1 | 2 | — |
 | Mid Dev 💻 | Programador | 2 | 2 | 1 | 3 | — |
-| Senior Dev 🧠 | Programador | 3 | 3 | 1 | 4 | Par Programming (pot:2, coste:2) |
-| Fullstack ⚡ | Programador | 2 | 2 | 1 | 3 | Par Programming (pot:1, coste:1) |
-| DevOps 🔧 | Programador | 1 | 1 | 1 | 2 | Automatización (pot:2, coste:2) |
+| Senior Dev 🧠 | Programador | 3 | 3 | 1 | 4 | Par Programming (pot:2, coste:2, dur:1) |
+| Fullstack ⚡ | Programador | 2 | 2 | 1 | 3 | Par Programming (pot:1, coste:1, dur:1) |
+| DevOps 🔧 | Programador | 1 | 1 | 1 | 2 | Automatización (pot:2, coste:2, dur:0) |
 | Intern 🎒 | Programador | 1 | 1 | 1 | 2 | — |
-| Architect 🏗️ | Programador | 3 | 2 | 0 | 5 | Par Programming (pot:3, coste:0) |
-| QA Tester 🔍 | QA | 1 | 1 | 1 | 2 | QA Testing (pot:0, coste:1) |
-| QA Lead 🛡️ | QA | 2 | 2 | 1 | 3 | QA Testing (pot:0, coste:2) |
+| Architect 🏗️ | Programador | 3 | 2 | 0 | 5 | Par Programming (pot:3, coste:0, dur:1) |
+| QA Tester 🔍 | QA | 1 | 1 | 1 | 2 | QA Testing (pot:0, coste:1, dur:0) |
+| QA Lead 🛡️ | QA | 2 | 2 | 1 | 3 | QA Testing (pot:0, coste:2, dur:0) |
 
 ---
 
@@ -126,89 +126,65 @@ Las habilidades están definidas en un catálogo centralizado (`SKILLS`). Cada c
 
 # Cosas a modificar
 
-## 1. Bug: Par Programming no aplica el buff de potencia
+## ✅ 1. Bug: Par Programming no aplica el buff de potencia
 
-### Problema
+### Implementado
 
-Cuando se usa Par Programming, la carta aliada recibe el estado `buff_ataque` en su `Set<string> estados`, pero **nadie lee ese estado**. Las funciones `playerAttackBug` y `playerAttackEnemy` usan directamente `card.definition.potencia` (que es inmutable del template) e ignoran completamente `card.estados`.
-
-La habilidad se ejecuta, la energía se consume, el mensaje aparece, pero la carta aliada ataca con la misma potencia de siempre.
-
-### Rediseño propuesto: efectos genéricos basados en la potencia de la tupla
-
-El problema de fondo es que cada habilidad tiene código hardcodeado por `skillId` dentro de `playerUseSkill`. Si las habilidades están numerizadas para evitar tener atributos ad-hoc por tipo, **los efectos deben seguir la misma filosofía**: la potencia de la tupla `[skillId, potencia, coste]` debe trasladarse automáticamente al estado/efecto que reciba la carta objetivo, sin lógica específica por skill.
-
-**Propuesta:**
-- Cuando una habilidad se aplica sobre una carta (aliada o enemiga), se debe crear un **efecto** asociado a esa carta que contenga: el tipo de modificación (ej: `+potencia`, `-potencia`), el valor (tomado de la `potencia` de la tupla) y la duración en turnos.
-- Las funciones de ataque (`playerAttackBug`, `playerAttackEnemy`, y la del bot) deben calcular la potencia efectiva sumando `definition.potencia` + todos los modificadores de efectos activos.
-- Los efectos deben decrementarse automáticamente al pasar turno y eliminarse cuando expiren.
+- ✅ Refactor de `playerUseSkill` a switch por `skill.accionTipo` (elimina hardcoding por `skillId`)
+- ✅ Interfaz `Effect` genérica con `tipo`, `valor`, `turnosRestantes`
+- ✅ `CardInstance` migrada a `efectosActivos: Effect[]` (reemplaza `estados: Set<string>`)
+- ✅ Función `calcularPotenciaReal()` que suma buffs/debuffs de efectos activos
+- ✅ `playerAttackBug` y `playerAttackEnemy` usan potencia efectiva en cálculos
+- ✅ `tickEfectos()` decrementa y expira efectos al fin de turno
 
 ---
 
-## 2. Duración de efectos: añadir número de turnos al array de habilidades
+## ✅ 2. Duración de efectos: añadir número de turnos al array de habilidades
 
-### Cambio
+### Implementado
 
-Ampliar la tupla de habilidades de `[skillId, potencia, coste]` a `[skillId, potencia, coste, duracion]`.
-
-- `duracion`: número de turnos que dura el efecto (0 = acción instantánea sin efecto persistente).
-- Para habilidades como **QA Testing** (devolver carta a la mano), la duración será `0` ya que no aplica un efecto sobre la carta, sino que ejecuta una acción directa.
-- Para **Par Programming**, la duración sería `1` (buff durante 1 turno) o el valor que se desee.
-- Para **Automatización** (daño al bug), la duración sería `0` (daño instantáneo).
-
----
-
-## 3. Separar Skills, Efectos y Cartas en archivos distintos
-
-### Estructura propuesta
-
-```
-src/constants/
-  skills.ts       → Catálogo de Skills (SKILLS) + interfaz Skill
-  effects.ts      → Clase/interfaz Effect, lógica de aplicar/decrementar/expirar efectos
-  cards.ts        → CardTemplate, CardInstance, CARD_DEFINITIONS, createDeck (sin skills)
-```
-
-**Interfaz `Effect` (nueva):**
-```ts
-interface Effect {
-  skillId: number;        // qué skill lo originó
-  tipo: string;           // 'buff_potencia' | 'debuff_potencia' | etc.
-  valor: number;          // potencia transferida desde la tupla
-  turnosRestantes: number; // se decrementa al pasar turno
-}
-```
-
-**`CardInstance` modificada:**
-```ts
-interface CardInstance {
-  instanceId: string;
-  definition: CardTemplate;
-  estresActual: number;
-  efectos: Effect[];      // reemplaza a estados: Set<string>
-  disponible: boolean;
-}
-```
+- ✅ Tupla de habilidades ampliada a `[skillId, potencia, coste, duracion]`
+- ✅ Duración controlada desde la carta, no desde la skill
+- ✅ QA Testing: `duracion: 0` (acción instantánea)
+- ✅ Par Programming: `duracion: 1` (buff por 1 turno)
+- ✅ Automatización: `duracion: 0` (daño instantáneo)
+- ✅ `playerUseSkill` lee `duracion` de la tupla (no de la skill)
 
 ---
 
-## 4. Feedback visual de buffs/debuffs
+## ✅ 3. Separar Skills, Efectos y Cartas en archivos distintos
 
-### Cambios necesarios en `GameCard.tsx`
+### Implementado
 
-- **Contorno de potencia**: si la carta tiene algún efecto `buff_potencia` activo → contorno verde alrededor del número de potencia. Si tiene `debuff_potencia` → contorno rojo.
-- **Potencia visual**: en vez de mostrar `definition.potencia`, mostrar la **potencia efectiva** (base + suma de efectos). Si es distinta a la base, cambiar el color del número:
-  - Verde y con `↑` si la efectiva es mayor que la base.
-  - Rojo y con `↓` si es menor.
-- **Tooltip/detalle**: al mantener presionada una carta (o al seleccionarla), mostrar un desglose: `Potencia base: 2 | Buff: +1 (1 turno)`.
+- ✅ `src/constants/effects.ts` → `EffectType`, `Effect` interface
+- ✅ `src/constants/skills.ts` → `Skill` interface, `SKILLS` catalog (sin `duracion`)
+- ✅ `src/constants/cards.ts` → `CardTemplate`, `CardInstance`, `CARD_DEFINITIONS`, funciones de deck
+- ✅ `src/constants/index.ts` → Barrel que re-exporta todo
+- ✅ Todos los consumidores migrados a importar desde `@/constants`
 
 ---
 
-## 5. Visual del tablero: mano del bot ocupa demasiado espacio
+## ✅ 4. Feedback visual de buffs/debuffs
 
-### Problema
+### Implementado
 
-Las cartas de la **mano del rival** (boca abajo, parte superior) ocupan mucho espacio visual cuando el bot acumula varias cartas. En dispositivos móviles comprimen el resto del tablero. Las cartas del **tablero** rival deben seguir siendo todas visibles en todo momento, ya que es indispensable para la jugabilidad.
+- ✅ **Potencia visual dinámmica**: `GameCard` muestra `calcularPotenciaReal(card)` en lugar de `definition.potencia`
+- ✅ **Coloreado por efecto**:
+  - 🟢 Verde (`text-emerald-500`) si potencia real > base (buff activo)
+  - 🔴 Rojo (`text-red-500`) si potencia real < base (debuff activo)
+  - ⚪ Gris (`text-stone-800`) si son iguales (sin modificación)
+- ✅ **Badge visual de efectos**: `✨` pulsa si `card.efectosActivos.length > 0`
+- ✅ **Mensajes mejorados**: ataques muestran `"atacó con X de daño"`, buffs muestran `"recibe buff_ataque +2 por 1 turno(s)"`
+
+**Pendiente:** Tooltip/desglose detallado de efectos activos (Potencia base: 3 | Buff: +2 (1 turno))
+
+---
+
+## ❌ 5. Visual del tablero: mano del bot ocupa demasiado espacio
+
+### Pendiente
+
+Las cartas de la **mano del rival** (boca abajo, parte superior) ocupan mucho espacio visual cuando el bot acumula varias cartas. En dispositivos móviles comprimen el resto del tablero.
 
 ### Propuesta
 
@@ -219,9 +195,9 @@ Reemplazar la fila de cartas boca abajo de la mano del bot por una **zona compac
 
 ---
 
-## 6. Rediseño visual de las cartas en el tablero
+## ❌ 6. Rediseño visual de las cartas en el tablero
 
-### Renombrar estrés → cordura
+### Pendiente: Renombrar estrés → cordura
 
 Cambiar la mecánica visual de estrés para que sea más intuitiva:
 - **Cordura** empieza en el valor máximo (`estresLimite`) y baja cuando recibe daño.
@@ -229,7 +205,7 @@ Cambiar la mecánica visual de estrés para que sea más intuitiva:
 - Se muestra como un **número único** (la cordura restante), no como `X/Y`. Esto mantiene la carta limpia y es más intuitivo.
 - Visualmente: `🧠 3` → recibe 1 de daño → `🧠 2` → recibe 2 más → `🧠 0` → carta destruida.
 
-### Layout de la carta en tablero
+### Propuesta: Layout de la carta en tablero
 
 ```
 ┌──────────────┐
@@ -243,7 +219,7 @@ Cambiar la mecánica visual de estrés para que sea más intuitiva:
 └──────────────┘
 ```
 
-**Cambios:**
+**Cambios necesarios:**
 - Eliminar la descripción de texto de la carta cuando está en el tablero (solo mostrarla en la mano o en un tooltip).
 - Potencia visible en la esquina inferior izquierda con icono ⚔️.
 - Cordura como número único en la esquina inferior derecha con icono 🧠 (sin formato X/Y).
@@ -254,19 +230,19 @@ Cambiar la mecánica visual de estrés para que sea más intuitiva:
 
 ---
 
-# Sugerencias de mejora (IA)
+# Sugerencias de mejora (IA) — No implementadas
 
 ## Gameplay
 
-1. **Ataque múltiple del bot**: actualmente el bot solo ataca con 1 programador por turno. Podría atacar con todos los disponibles (consumiendo energía por cada uno), igual que el jugador.
+1. **Ataque múltiple del bot** ❌: actualmente el bot solo ataca con 1 programador por turno. Podría atacar con todos los disponibles (consumiendo energía por cada uno), igual que el jugador.
 
-2. **IA del bot mejorada**: el bot no usa habilidades de buff (Par Programming). Añadir lógica para que use buffs en su programador más fuerte antes de atacar.
+2. **IA del bot mejorada** ❌: el bot no usa habilidades de buff (Par Programming). Añadir lógica para que use buffs en su programador más fuerte antes de atacar.
 
-3. **Sistema de prioridad de ataque a cartas enemigas**: los QA del jugador pueden atacar cualquier carta enemiga, pero no hay indicador de "amenaza". Mostrar qué carta enemiga tiene más potencia con un icono de peligro para guiar al jugador.
+3. **Sistema de prioridad de ataque a cartas enemigas** ❌: los QA del jugador pueden atacar cualquier carta enemiga, pero no hay indicador de "amenaza". Mostrar qué carta enemiga tiene más potencia con un icono de peligro para guiar al jugador.
 
-4. **Coste progresivo de energía**: actualmente la energía crece indefinidamente cada turno. Considerar un cap (ya hay `MAX_ENERGY_CAP = 10` definido pero no usado en el código). Implementar el cap para que las partidas no se desequilibren en turnos tardíos.
+4. **Coste progresivo de energía** ❌: actualmente la energía crece indefinidamente cada turno. Considerar un cap (ya hay `MAX_ENERGY_CAP = 10` definido pero no usado en el código). Implementar el cap para que las partidas no se desequilibren en turnos tardíos.
 
-5. **Más tipos de habilidades**: con el sistema de efectos genérico propuesto, se podrían añadir fácilmente:
+5. **Más tipos de habilidades** ❌: con el sistema de efectos genérico ya implementado, se podrían añadir fácilmente:
    - **Escudo**: reduce el daño de estrés recibido durante N turnos.
    - **Stun**: la carta enemiga no puede actuar durante 1 turno.
    - **Robo de energía**: resta energía al rival y la suma a la propia.
@@ -274,12 +250,12 @@ Cambiar la mecánica visual de estrés para que sea más intuitiva:
 
 ## Visual
 
-6. **Animaciones de efecto**: al aplicar Par Programming, animar un destello verde en la carta aliada. Al usar QA Testing, animar la carta enemiga "volando" de vuelta a la mano.
+6. **Animaciones de efecto** ❌: al aplicar Par Programming, animar un destello verde en la carta aliada. Al usar QA Testing, animar la carta enemiga "volando" de vuelta a la mano.
 
-7. **Historial de acciones mejorado**: el log actual es texto plano. Reemplazar por un feed con iconos, colores por tipo de acción y agrupación por turno.
+7. **Historial de acciones mejorado** ❌: el log actual es texto plano. Reemplazar por un feed con iconos, colores por tipo de acción y agrupación por turno.
 
-8. **Preview de daño**: al pasar el ratón sobre "Atacar Bug", mostrar en el bug un preview del daño (número parpadeante o barra que se reduce temporalmente).
+8. **Preview de daño** ❌: al pasar el ratón sobre "Atacar Bug", mostrar en el bug un preview del daño (número parpadeante o barra que se reduce temporalmente).
 
-9. **Indicador de cartas restantes en mazo**: ya existe el `DeckPile`, pero añadir un tooltip que muestre la composición restante del mazo (cuántas de cada tipo quedan).
+9. **Indicador de cartas restantes en mazo** ❌: ya existe el `DeckPile`, pero añadir un tooltip que muestre la composición restante del mazo (cuántas de cada tipo quedan).
 
-10. **Modo oscuro/tema**: las cartas y el tablero tienen un estilo medieval/fantasía. Considerar un tema alternativo "modo terminal" acorde con la temática de programadores (fondo oscuro tipo IDE, cartas con estética de código).
+10. **Modo oscuro/tema** ❌: las cartas y el tablero tienen un estilo medieval/fantasía. Considerar un tema alternativo "modo terminal" acorde con la temática de programadores (fondo oscuro tipo IDE, cartas con estética de código).
