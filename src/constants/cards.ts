@@ -1,4 +1,6 @@
 import type { Effect } from './effects';
+import defaultCardImage from '@/assets/cards/default-card.png';
+import midDevAudio from '@/assets/audio/mid-dev.mp3';
 
 export type CardType = 'programador' | 'qa';
 
@@ -11,9 +13,17 @@ export interface CardTemplate {
   ataqueCoste: number;
   estresLimite: number;
   descripcion: string;
-  emoji: string;
+  image?: string;
+  audio?: string;
   /** Cada tupla: [id_habilidad, potencia, coste, duracion] */
   habilidades: [number, number, number, number][];
+}
+
+export const DEFAULT_CARD_IMAGE = defaultCardImage;
+
+export function resolveCardImage(image?: string): string {
+  if (!image || image.trim().length === 0) return DEFAULT_CARD_IMAGE;
+  return image;
 }
 
 export const CARD_DEFINITIONS: CardTemplate[] = [
@@ -26,7 +36,6 @@ export const CARD_DEFINITIONS: CardTemplate[] = [
     ataqueCoste: 1,
     estresLimite: 2,
     descripcion: 'Resuelve bugs simples con entusiasmo.',
-    emoji: '👶',
     habilidades: [],
   },
   {
@@ -38,7 +47,7 @@ export const CARD_DEFINITIONS: CardTemplate[] = [
     ataqueCoste: 1,
     estresLimite: 3,
     descripcion: 'Experiencia sólida en debugging.',
-    emoji: '💻',
+    audio: midDevAudio,
     habilidades: [],
   },
   {
@@ -50,7 +59,7 @@ export const CARD_DEFINITIONS: CardTemplate[] = [
     ataqueCoste: 1,
     estresLimite: 4,
     descripcion: 'Veterano cazador de bugs.',
-    emoji: '🧠',
+    audio: midDevAudio,
     habilidades: [[3, 2, 2, 1]],
   },
   {
@@ -62,7 +71,7 @@ export const CARD_DEFINITIONS: CardTemplate[] = [
     ataqueCoste: 1,
     estresLimite: 3,
     descripcion: 'Ataca bugs en frontend y backend.',
-    emoji: '⚡',
+    audio: midDevAudio,
     habilidades: [[3, 1, 1, 1]],
   },
   {
@@ -74,7 +83,7 @@ export const CARD_DEFINITIONS: CardTemplate[] = [
     ataqueCoste: 1,
     estresLimite: 2,
     descripcion: 'Automatiza la destrucción de bugs.',
-    emoji: '🔧',
+    audio: midDevAudio,
     habilidades: [[5, 2, 2, 0]],
   },
   {
@@ -86,7 +95,6 @@ export const CARD_DEFINITIONS: CardTemplate[] = [
     ataqueCoste: 1,
     estresLimite: 2,
     descripcion: 'Novato con ganas de aprender.',
-    emoji: '🎒',
     habilidades: [],
   },
   {
@@ -98,7 +106,7 @@ export const CARD_DEFINITIONS: CardTemplate[] = [
     ataqueCoste: 0,
     estresLimite: 5,
     descripcion: 'Diseña la solución desde la raíz.',
-    emoji: '🏗️',
+    audio: midDevAudio,
     habilidades: [[3, 3, 0, 1]],
   },
   {
@@ -110,7 +118,7 @@ export const CARD_DEFINITIONS: CardTemplate[] = [
     ataqueCoste: 1,
     estresLimite: 2,
     descripcion: 'Devuelve un programador rival a su mano.',
-    emoji: '🔍',
+    audio: midDevAudio,
     habilidades: [[4, 0, 1, 0]],
   },
   {
@@ -122,7 +130,7 @@ export const CARD_DEFINITIONS: CardTemplate[] = [
     ataqueCoste: 1,
     estresLimite: 3,
     descripcion: 'Limpia la mesa del rival con autoridad.',
-    emoji: '🛡️',
+    audio: midDevAudio,
     habilidades: [[4, 0, 2, 0]],
   },
 ];

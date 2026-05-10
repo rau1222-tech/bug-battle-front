@@ -35,6 +35,7 @@ export default function GameBoard({ onExit, deckComposition, playerName = 'Jugad
   const [dragPos, setDragPos] = useState<{ x: number; y: number } | null>(null);
   const draggingCardIdRef = useRef<string | null>(null);
   const dragOverSlotRef = useRef<number | null>(null);
+  const prevBotTableIdsRef = useRef<string[]>([]);
 
   // Action log — accumulates every game.message change
   const [logEntries, setLogEntries] = useState<{ id: number; text: string }[]>([]);
@@ -52,6 +53,29 @@ export default function GameBoard({ onExit, deckComposition, playerName = 'Jugad
       return next.length > 50 ? next.slice(next.length - 50) : next;
     });
   }, [game.message]);
+
+  const playCardAudio = useCallback((audioSrc?: string) => {
+    if (!audioSrc) return;
+    const audio = new Audio(audioSrc);
+    const playPromise = audio.play();
+    if (playPromise) {
+      void playPromise.catch(() => {
+        // Ignore autoplay rejections and transient playback errors.
+      });
+    }
+  }, []);
+
+  useEffect(() => {
+    const previousIds = prevBotTableIdsRef.current;
+    const currentIds = game.botTable.filter((card): card is NonNullable<typeof card> => card !== null).map((card) => card.instanceId);
+
+    const addedBotCard = game.botTable.find((card) => card !== null && !previousIds.includes(card.instanceId));
+    if (addedBotCard) {
+      playCardAudio(addedBotCard.definition.audio);
+    }
+
+    prevBotTableIdsRef.current = currentIds;
+  }, [game.botTable, playCardAudio]);
 
   const draggingCard = draggingCardId
     ? game.playerHand.find(c => c.instanceId === draggingCardId) ?? null
@@ -177,6 +201,19 @@ export default function GameBoard({ onExit, deckComposition, playerName = 'Jugad
     const cardId = draggingCardIdRef.current;
     const slotIdx = dragOverSlotRef.current;
     if (commit && cardId !== null && slotIdx !== null) {
+      const card = game.playerHand.find((c) => c.instanceId === cardId);
+      const canPlace =
+        game.gamePhase === 'playing'
+        && game.turn === 'player'
+        && slotIdx >= 0
+        && slotIdx < TABLE_MAX
+        && game.playerTable[slotIdx] === null
+        && !!card
+        && game.playerEnergy >= (card?.definition.coste ?? Infinity);
+
+      if (canPlace) {
+        playCardAudio(card.definition.audio);
+      }
       game.playCardToTable(cardId, slotIdx);
     }
     draggingCardIdRef.current = null;
@@ -186,7 +223,7 @@ export default function GameBoard({ onExit, deckComposition, playerName = 'Jugad
     setDragPos(null);
     document.body.style.userSelect = '';
     document.body.style.touchAction = '';
-  }, [game]);
+  }, [game, playCardAudio]);
 
   const updateDragOverFromPoint = useCallback((x: number, y: number) => {
     const el = document.elementFromPoint(x, y) as HTMLElement | null;

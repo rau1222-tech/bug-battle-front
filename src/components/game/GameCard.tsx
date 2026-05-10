@@ -1,5 +1,5 @@
 import { motion } from 'framer-motion';
-import { CardInstance, calcularPotenciaReal } from '@/constants';
+import { CardInstance, DEFAULT_CARD_IMAGE, calcularPotenciaReal, resolveCardImage } from '@/constants';
 import cardBase from '@/assets/Base-Carta.png';
 
 interface GameCardProps {
@@ -84,7 +84,18 @@ export default function GameCard({ card, isOpponent = false, index = 0, disabled
 
       {/* CENTER: Card Art */}
       <div className="absolute top-[13%] left-[8%] right-[8%] bottom-[45%] flex items-center justify-center pointer-events-none">
-        <span className="text-base sm:text-2xl md:text-3xl">{definition.emoji}</span>
+        <img
+          src={resolveCardImage(definition.image)}
+          alt={definition.nombre}
+          className="w-full h-full object-contain rounded-sm"
+          onError={(event) => {
+            const img = event.currentTarget;
+            if (img.dataset.fallbackApplied === 'true') return;
+            img.dataset.fallbackApplied = 'true';
+            img.src = DEFAULT_CARD_IMAGE;
+          }}
+          draggable={false}
+        />
       </div>
 
       {/* BOTTOM: Ability */}

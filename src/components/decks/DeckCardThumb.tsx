@@ -1,4 +1,4 @@
-import { CardTemplate } from '@/constants';
+import { CardTemplate, DEFAULT_CARD_IMAGE, resolveCardImage } from '@/constants';
 
 interface Props {
   def: CardTemplate;
@@ -22,7 +22,18 @@ export default function DeckCardThumb({ def, quantity, onClick, disabled, small 
         ${disabled ? 'opacity-40 cursor-not-allowed' : 'hover:border-amber-300/80 active:scale-[0.97]'}`}
     >
       <div className="flex items-center gap-2">
-        <div className={`${small ? 'text-2xl' : 'text-3xl'} shrink-0`}>{def.emoji}</div>
+        <img
+          src={resolveCardImage(def.image)}
+          alt={def.nombre}
+          className={`${small ? 'w-8 h-8' : 'w-10 h-10'} shrink-0 object-contain rounded`}
+          onError={(event) => {
+            const img = event.currentTarget;
+            if (img.dataset.fallbackApplied === 'true') return;
+            img.dataset.fallbackApplied = 'true';
+            img.src = DEFAULT_CARD_IMAGE;
+          }}
+          draggable={false}
+        />
         <div className="flex-1 min-w-0">
           <div className={`font-display font-semibold text-amber-100 truncate ${small ? 'text-[11px]' : 'text-xs'}`}>
             {def.nombre}

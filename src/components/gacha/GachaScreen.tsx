@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import BackButton from '@/components/ui/BackButton';
-import { CARD_DEFINITIONS, type CardTemplate } from '@/constants';
+import { CARD_DEFINITIONS, DEFAULT_CARD_IMAGE, resolveCardImage, type CardTemplate } from '@/constants';
 import {
   useCollection,
   openPack,
@@ -156,7 +156,18 @@ export default function GachaScreen({ onBack }: Props) {
                         key={def.id}
                         className={`flex items-center gap-2 px-2.5 py-2 rounded-md bg-[hsl(220,15%,12%)] border ${qty > 0 ? RARITY_COLORS[rarity] : 'text-purple-200/20 border-[hsl(220,15%,15%)]'}`}
                       >
-                        <span className="text-base">{def.emoji}</span>
+                        <img
+                          src={resolveCardImage(def.image)}
+                          alt={def.nombre}
+                          className="w-5 h-5 object-contain rounded shrink-0"
+                          onError={(event) => {
+                            const img = event.currentTarget;
+                            if (img.dataset.fallbackApplied === 'true') return;
+                            img.dataset.fallbackApplied = 'true';
+                            img.src = DEFAULT_CARD_IMAGE;
+                          }}
+                          draggable={false}
+                        />
                         <div className="flex-1 min-w-0">
                           <p className="text-[11px] font-display truncate">{def.nombre}</p>
                           <p className="text-[9px] font-body opacity-60">{RARITY_LABELS[rarity]}</p>
@@ -249,7 +260,18 @@ export default function GachaScreen({ onBack }: Props) {
                               animate={{ opacity: 1 }}
                               className={`flex flex-col items-center gap-2 p-4 sm:p-5 rounded-lg bg-gradient-to-b from-[hsl(220,15%,14%)] to-[hsl(220,18%,10%)] border-2 ${RARITY_COLORS[rarity]} backdrop-blur-sm shadow-lg ${RARITY_GLOW[rarity]} w-24 sm:w-32`}
                             >
-                              <span className="text-3xl sm:text-4xl">{def.emoji}</span>
+                              <img
+                                src={resolveCardImage(def.image)}
+                                alt={def.nombre}
+                                className="w-12 h-12 sm:w-16 sm:h-16 object-contain rounded"
+                                onError={(event) => {
+                                  const img = event.currentTarget;
+                                  if (img.dataset.fallbackApplied === 'true') return;
+                                  img.dataset.fallbackApplied = 'true';
+                                  img.src = DEFAULT_CARD_IMAGE;
+                                }}
+                                draggable={false}
+                              />
                               <span className="text-xs sm:text-sm font-display text-center leading-tight">
                                 {def.nombre}
                               </span>
