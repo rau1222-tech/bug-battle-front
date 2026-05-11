@@ -2,16 +2,16 @@ import type { Effect } from './effects';
 import defaultCardImage from '@/assets/cards/default-card.png';
 import midDevAudio from '@/assets/audio/mid-dev.mp3';
 
-export type CardType = 'programador' | 'qa';
+export type CardType = 'programador' | 'qa' | 'consumible';
 
 export interface CardTemplate {
   id: string;
   nombre: string;
   tipo: CardType;
-  potencia: number;
+  potencia?: number;
   coste: number;
-  ataqueCoste: number;
-  estresLimite: number;
+  ataqueCoste?: number;
+  corduraMax?: number;
   descripcion: string;
   image?: string;
   audio?: string;
@@ -34,7 +34,7 @@ export const CARD_DEFINITIONS: CardTemplate[] = [
     potencia: 1,
     coste: 1,
     ataqueCoste: 1,
-    estresLimite: 2,
+    corduraMax: 2,
     descripcion: 'Resuelve bugs simples con entusiasmo.',
     habilidades: [],
   },
@@ -45,7 +45,7 @@ export const CARD_DEFINITIONS: CardTemplate[] = [
     potencia: 2,
     coste: 2,
     ataqueCoste: 1,
-    estresLimite: 3,
+    corduraMax: 3,
     descripcion: 'Experiencia sólida en debugging.',
     audio: midDevAudio,
     habilidades: [],
@@ -57,7 +57,7 @@ export const CARD_DEFINITIONS: CardTemplate[] = [
     potencia: 3,
     coste: 3,
     ataqueCoste: 1,
-    estresLimite: 4,
+    corduraMax: 4,
     descripcion: 'Veterano cazador de bugs.',
     audio: midDevAudio,
     habilidades: [[3, 2, 2, 1]],
@@ -69,7 +69,7 @@ export const CARD_DEFINITIONS: CardTemplate[] = [
     potencia: 2,
     coste: 2,
     ataqueCoste: 1,
-    estresLimite: 3,
+    corduraMax: 3,
     descripcion: 'Ataca bugs en frontend y backend.',
     audio: midDevAudio,
     habilidades: [[3, 1, 1, 1]],
@@ -81,7 +81,7 @@ export const CARD_DEFINITIONS: CardTemplate[] = [
     potencia: 1,
     coste: 1,
     ataqueCoste: 1,
-    estresLimite: 2,
+    corduraMax: 2,
     descripcion: 'Automatiza la destrucción de bugs.',
     audio: midDevAudio,
     habilidades: [[5, 2, 2, 0]],
@@ -93,7 +93,7 @@ export const CARD_DEFINITIONS: CardTemplate[] = [
     potencia: 1,
     coste: 1,
     ataqueCoste: 1,
-    estresLimite: 2,
+    corduraMax: 2,
     descripcion: 'Novato con ganas de aprender.',
     habilidades: [],
   },
@@ -104,7 +104,7 @@ export const CARD_DEFINITIONS: CardTemplate[] = [
     potencia: 3,
     coste: 2,
     ataqueCoste: 0,
-    estresLimite: 5,
+    corduraMax: 5,
     descripcion: 'Diseña la solución desde la raíz.',
     audio: midDevAudio,
     habilidades: [[3, 3, 0, 1]],
@@ -116,7 +116,7 @@ export const CARD_DEFINITIONS: CardTemplate[] = [
     potencia: 1,
     coste: 1,
     ataqueCoste: 1,
-    estresLimite: 2,
+    corduraMax: 2,
     descripcion: 'Devuelve un programador rival a su mano.',
     audio: midDevAudio,
     habilidades: [[4, 0, 1, 0]],
@@ -128,10 +128,34 @@ export const CARD_DEFINITIONS: CardTemplate[] = [
     potencia: 2,
     coste: 2,
     ataqueCoste: 1,
-    estresLimite: 3,
+    corduraMax: 3,
     descripcion: 'Limpia la mesa del rival con autoridad.',
     audio: midDevAudio,
     habilidades: [[4, 0, 2, 0]],
+  },
+  {
+    id: 'cafe-maquina',
+    nombre: 'Café de Máquina',
+    tipo: 'consumible',
+    coste: 1,
+    descripcion: 'Restaura 3 de cordura a un aliado.',
+    habilidades: [[6, 3, 1, 0]],
+  },
+  {
+    id: 'pr-aprobado',
+    nombre: 'PR Aprobado',
+    tipo: 'consumible',
+    coste: 2,
+    descripcion: '+2 potencia a un aliado por 1 turno.',
+    habilidades: [[7, 2, 2, 1]],
+  },
+  {
+    id: 'hotfix',
+    nombre: 'Hotfix de Emergencia',
+    tipo: 'consumible',
+    coste: 2,
+    descripcion: '2 de daño directo al Bug.',
+    habilidades: [[8, 2, 2, 0]],
   },
 ];
 
@@ -146,13 +170,13 @@ export const ENERGY_BONUS_HIT = 1;
 export interface CardInstance {
   instanceId: string;
   definition: CardTemplate;
-  estresActual: number;
+  cordura: number;
   efectosActivos: Effect[];
   disponible: boolean;
 }
 
 export function calcularPotenciaReal(instance: CardInstance): number {
-  const base = instance.definition.potencia;
+  const base = instance.definition.potencia ?? 0;
   const delta = instance.efectosActivos.reduce((acc, effect) => {
     if (effect.tipo === 'buff_ataque') return acc + effect.valor;
     if (effect.tipo === 'debuff_ataque') return acc - effect.valor;
@@ -181,14 +205,14 @@ export function createDeck(composition?: DeckComposition[]): CardInstance[] {
       const def = defMap.get(entry.card_id);
       if (!def) continue;
       for (let i = 0; i < entry.quantity; i++) {
-        deck.push({ instanceId: `${def.id}-${counter++}`, definition: def, estresActual: 0, efectosActivos: [], disponible: true });
+        deck.push({ instanceId: `${def.id}-${counter++}`, definition: def, cordura: def.corduraMax ?? 0, efectosActivos: [], disponible: true });
       }
     }
   } else {
     while (deck.length < DECK_SIZE) {
       for (const def of CARD_DEFINITIONS) {
         if (deck.length >= DECK_SIZE) break;
-        deck.push({ instanceId: `${def.id}-${counter++}`, definition: def, estresActual: 0, efectosActivos: [], disponible: true });
+        deck.push({ instanceId: `${def.id}-${counter++}`, definition: def, cordura: def.corduraMax ?? 0, efectosActivos: [], disponible: true });
       }
     }
   }

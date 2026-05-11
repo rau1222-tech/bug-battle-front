@@ -20,7 +20,11 @@ type SelectionPhase =
   | { type: 'none' }
   | { type: 'card-selected'; cardId: string }
   | { type: 'picking-enemy'; cardId: string; actionType: 'attack-enemy' | 'skill'; skillIndex?: number }
-  | { type: 'picking-ally'; cardId: string; skillIndex: number };
+  | { type: 'picking-ally'; cardId: string; skillIndex: number }
+  | { type: 'consumable-picking-ally'; cardId: string }
+  | { type: 'consumable-picking-enemy'; cardId: string };
+
+type ConsumableDropTarget = 'bug' | 'carta_aliada' | 'carta_enemiga';
 
 export default function GameBoard({ onExit, deckComposition, playerName = 'Jugador' }: GameBoardProps) {
   const game = useGameLogic(deckComposition);
@@ -32,9 +36,13 @@ export default function GameBoard({ onExit, deckComposition, playerName = 'Jugad
   // Drag state (pointer-based — works for mouse + touch)
   const [draggingCardId, setDraggingCardId] = useState<string | null>(null);
   const [dragOverSlot, setDragOverSlot] = useState<number | null>(null);
+  const [draggingConsumableTarget, setDraggingConsumableTarget] = useState<ConsumableDropTarget | null>(null);
+  const [dragOverTargetId, setDragOverTargetId] = useState<string | 'bug' | null>(null);
   const [dragPos, setDragPos] = useState<{ x: number; y: number } | null>(null);
   const draggingCardIdRef = useRef<string | null>(null);
   const dragOverSlotRef = useRef<number | null>(null);
+  const draggingConsumableTargetRef = useRef<ConsumableDropTarget | null>(null);
+  const dragOverTargetIdRef = useRef<string | 'bug' | null>(null);
   const prevBotTableIdsRef = useRef<string[]>([]);
 
   // Action log — accumulates every game.message change
@@ -152,13 +160,20 @@ export default function GameBoard({ onExit, deckComposition, playerName = 'Jugad
         game.playerUseSkill(selection.cardId, selection.skillIndex, cardId);
       }
       setSelection({ type: 'none' });
+    } else if (selection.type === 'consumable-picking-enemy') {
+      game.playerUseConsumable(selection.cardId, cardId);
+      setSelection({ type: 'none' });
     }
   }, [selection, game]);
 
   const handleAllyCardSelect = useCallback((cardId: string) => {
-    if (selection.type !== 'picking-ally') return;
-    game.playerUseSkill(selection.cardId, selection.skillIndex, cardId);
-    setSelection({ type: 'none' });
+    if (selection.type === 'picking-ally') {
+      game.playerUseSkill(selection.cardId, selection.skillIndex, cardId);
+      setSelection({ type: 'none' });
+    } else if (selection.type === 'consumable-picking-ally') {
+      game.playerUseConsumable(selection.cardId, cardId);
+      setSelection({ type: 'none' });
+    }
   }, [selection, game]);
 
   const handleAction = useCallback((actionId: string) => {
@@ -200,7 +215,20 @@ export default function GameBoard({ onExit, deckComposition, playerName = 'Jugad
   const endDrag = useCallback((commit: boolean) => {
     const cardId = draggingCardIdRef.current;
     const slotIdx = dragOverSlotRef.current;
-    if (commit && cardId !== null && slotIdx !== null) {
+    const consumableTarget = draggingConsumableTargetRef.current;
+    const targetId = dragOverTargetIdRef.current;
+
+    if (commit && cardId !== null && consumableTarget !== null) {
+      const card = game.playerHand.find((c) => c.instanceId === cardId);
+      if (card && card.definition.tipo === 'consumible' && targetId !== null) {
+        if (targetId === 'bug') {
+          game.playerUseConsumable(cardId);
+        } else {
+          game.playerUseConsumable(cardId, targetId);
+        }
+        playCardAudio(card.definition.audio);
+      }
+    } else if (commit && cardId !== null && slotIdx !== null) {
       const card = game.playerHand.find((c) => c.instanceId === cardId);
       const canPlace =
         game.gamePhase === 'playing'
@@ -218,8 +246,12 @@ export default function GameBoard({ onExit, deckComposition, playerName = 'Jugad
     }
     draggingCardIdRef.current = null;
     dragOverSlotRef.current = null;
+    draggingConsumableTargetRef.current = null;
+    dragOverTargetIdRef.current = null;
     setDraggingCardId(null);
     setDragOverSlot(null);
+    setDraggingConsumableTarget(null);
+    setDragOverTargetId(null);
     setDragPos(null);
     document.body.style.userSelect = '';
     document.body.style.touchAction = '';
@@ -227,24 +259,68 @@ export default function GameBoard({ onExit, deckComposition, playerName = 'Jugad
 
   const updateDragOverFromPoint = useCallback((x: number, y: number) => {
     const el = document.elementFromPoint(x, y) as HTMLElement | null;
+    const consumableTarget = draggingConsumableTargetRef.current;
+
+    if (consumableTarget) {
+      let matchedTarget: string | 'bug' | null = null;
+
+      if (consumableTarget === 'bug') {
+        const bugEl = el?.closest('[data-drop-target="bug"]') as HTMLElement | null;
+        matchedTarget = bugEl ? 'bug' : null;
+      } else if (consumableTarget === 'carta_aliada') {
+        const allyEl = el?.closest('[data-drop-target="ally-card"]') as HTMLElement | null;
+        matchedTarget = allyEl?.dataset.cardId ?? null;
+      } else if (consumableTarget === 'carta_enemiga') {
+        const enemyEl = el?.closest('[data-drop-target="enemy-card"]') as HTMLElement | null;
+        matchedTarget = enemyEl?.dataset.cardId ?? null;
+      }
+
+      dragOverSlotRef.current = null;
+      setDragOverSlot(null);
+      dragOverTargetIdRef.current = matchedTarget;
+      setDragOverTargetId(matchedTarget);
+      return;
+    }
+
     const slotEl = el?.closest('[data-slot-index]') as HTMLElement | null;
     if (slotEl) {
       const idx = Number(slotEl.dataset.slotIndex);
       if (!Number.isNaN(idx)) {
         dragOverSlotRef.current = idx;
         setDragOverSlot(idx);
+        dragOverTargetIdRef.current = null;
+        setDragOverTargetId(null);
         return;
       }
     }
     dragOverSlotRef.current = null;
     setDragOverSlot(null);
+    dragOverTargetIdRef.current = null;
+    setDragOverTargetId(null);
   }, []);
 
   const handlePointerDownCard = useCallback((e: React.PointerEvent, cardId: string) => {
     if (!isPlayerTurn || game.gamePhase !== 'playing') return;
-    if (game.playerTable.every(Boolean)) return;
+    const card = game.playerHand.find((c) => c.instanceId === cardId);
+    if (!card) return;
+
+    const isConsumible = card.definition.tipo === 'consumible';
+    if (!isConsumible && game.playerTable.every(Boolean)) return;
+
     // Only main button for mouse; touch/pen are always allowed
     if (e.pointerType === 'mouse' && e.button !== 0) return;
+
+    if (isConsumible) {
+      const habilidad = card.definition.habilidades[0];
+      const skill = habilidad ? SKILLS[habilidad[0]] : null;
+      if (!skill) return;
+      draggingConsumableTargetRef.current = skill.objetivo;
+      setDraggingConsumableTarget(skill.objetivo);
+    } else {
+      draggingConsumableTargetRef.current = null;
+      setDraggingConsumableTarget(null);
+    }
+
     e.preventDefault();
     (e.currentTarget as HTMLElement).setPointerCapture?.(e.pointerId);
     draggingCardIdRef.current = cardId;
@@ -253,7 +329,7 @@ export default function GameBoard({ onExit, deckComposition, playerName = 'Jugad
     // Prevent page scroll while dragging on touch
     document.body.style.userSelect = 'none';
     document.body.style.touchAction = 'none';
-  }, [isPlayerTurn, game.gamePhase, game.playerTable]);
+  }, [isPlayerTurn, game.gamePhase, game.playerTable, game.playerHand]);
 
   const handlePointerMoveCard = useCallback((e: React.PointerEvent) => {
     if (!draggingCardIdRef.current) return;
@@ -306,7 +382,7 @@ export default function GameBoard({ onExit, deckComposition, playerName = 'Jugad
           }`}
         >
           {isPlayerTurn
-            ? (selection.type === 'picking-enemy' || selection.type === 'picking-ally') ? '🎯 OBJETIVO' : `🟢 ${playerName.toUpperCase()}`
+            ? (selection.type === 'picking-enemy' || selection.type === 'picking-ally' || draggingConsumableTarget !== null) ? '🎯 OBJETIVO' : `🟢 ${playerName.toUpperCase()}`
             : '🔴 RIVAL'}
         </motion.div>
 
@@ -350,7 +426,7 @@ export default function GameBoard({ onExit, deckComposition, playerName = 'Jugad
 
       {/* ===== Picking-target hint pill (only when choosing QA target) ===== */}
       <AnimatePresence>
-        {(selection.type === 'picking-enemy' || selection.type === 'picking-ally') && (
+        {(selection.type === 'picking-enemy' || selection.type === 'picking-ally' || draggingConsumableTarget !== null) && (
           <motion.div
             initial={{ opacity: 0, y: -8 }}
             animate={{ opacity: 1, y: 0 }}
@@ -358,7 +434,13 @@ export default function GameBoard({ onExit, deckComposition, playerName = 'Jugad
             className="absolute top-11 sm:top-16 left-1/2 -translate-x-1/2 z-20 max-w-[95%]"
           >
             <span className="text-[9px] sm:text-xs font-body text-amber-100/90 bg-black/50 backdrop-blur-sm px-2 sm:px-4 py-1 sm:py-1.5 rounded-full border border-amber-500/40 whitespace-nowrap">
-              {selection.type === 'picking-ally'
+              {draggingConsumableTarget === 'bug'
+                ? '🧪 Suelta sobre el Bug'
+                : draggingConsumableTarget === 'carta_aliada'
+                  ? '🧪 Suelta sobre una carta aliada'
+                  : draggingConsumableTarget === 'carta_enemiga'
+                    ? '🧪 Suelta sobre una carta rival'
+                    : selection.type === 'picking-ally'
                 ? '👆 Elige carta aliada para aplicar el efecto'
                 : selection.type === 'picking-enemy' && selection.actionType === 'attack-enemy'
                   ? '👆 Elige carta rival para atacar'
@@ -410,10 +492,15 @@ export default function GameBoard({ onExit, deckComposition, playerName = 'Jugad
             Bot
           </div>
           <div className={`flex items-end justify-center gap-1 sm:gap-3 min-h-[5rem] sm:min-h-[7rem] md:min-h-[10rem] px-1 sm:px-4 transition-all duration-300 ${
-            selection.type === 'picking-enemy' ? 'ring-2 ring-red-500/50 rounded-xl bg-red-900/10' : ''
+            selection.type === 'picking-enemy' || draggingConsumableTarget === 'carta_enemiga' ? 'ring-2 ring-red-500/50 rounded-xl bg-red-900/10' : ''
           }`}>
             {game.botTable.map((card, i) => (
-              <div key={`bot-slot-${i}`} className="relative w-[3.6rem] h-[5rem] sm:w-[5rem] sm:h-[7rem] md:w-[7rem] md:h-[9.8rem] flex items-end justify-center">
+              <div
+                key={`bot-slot-${i}`}
+                data-drop-target={card ? 'enemy-card' : undefined}
+                data-card-id={card?.instanceId}
+                className="relative w-[3.6rem] h-[5rem] sm:w-[5rem] sm:h-[7rem] md:w-[7rem] md:h-[9.8rem] flex items-end justify-center"
+              >
                 {card ? (
                   <>
                     <GameCard
@@ -433,6 +520,14 @@ export default function GameBoard({ onExit, deckComposition, playerName = 'Jugad
                       />
                     )}
                   </>
+                    {draggingConsumableTarget === 'carta_enemiga' && dragOverTargetId === card.instanceId && (
+                      <motion.div
+                        initial={{ opacity: 0.3, scale: 0.92 }}
+                        animate={{ opacity: 1, scale: [1, 1.06, 1] }}
+                        transition={{ scale: { duration: 0.8, repeat: Infinity } }}
+                        className="absolute -inset-2 rounded-xl border-2 border-cyan-300 shadow-[0_0_24px_rgba(34,211,238,0.7)] pointer-events-none z-10"
+                      />
+                    )}
                 ) : (
                   <div className="w-full h-full rounded-lg border-2 border-dashed border-amber-600/25 bg-amber-900/5" />
                 )}
@@ -442,21 +537,30 @@ export default function GameBoard({ onExit, deckComposition, playerName = 'Jugad
         </div>
 
         {/* CENTER — Bug */}
-        <div className="flex items-center justify-center py-2 relative z-10">
+        <div data-drop-target="bug" className="flex items-center justify-center py-2 relative z-10">
           <BugCentral complexity={game.bugComplexity} bugState={game.bugState} id="bug-central" />
+          {draggingConsumableTarget === 'bug' && dragOverTargetId === 'bug' && (
+            <motion.div
+              initial={{ opacity: 0.3, scale: 0.92 }}
+              animate={{ opacity: 1, scale: [1, 1.06, 1] }}
+              transition={{ scale: { duration: 0.8, repeat: Infinity } }}
+              className="absolute inset-0 rounded-full border-2 border-cyan-300 shadow-[0_0_28px_rgba(34,211,238,0.8)] pointer-events-none"
+            />
+          )}
         </div>
 
         {/* PLAYER TABLE — 4 independent slot drop zones */}
         <div className="flex-1 flex flex-col justify-start pt-2">
           <div ref={tableRef} className="flex items-start justify-center gap-1 sm:gap-3 min-h-[5rem] sm:min-h-[7rem] md:min-h-[10rem] px-1 sm:px-4 relative">
             {game.playerTable.map((card, i) => {
-              const isHovered = dragOverSlot === i;
+              const isHovered = draggingConsumableTarget === null && dragOverSlot === i;
               const isOccupied = card !== null;
-              const canDrop = !isOccupied && draggingCardId !== null;
               return (
                 <div
                   key={`slot-${i}`}
                   data-slot-index={!isOccupied ? i : undefined}
+                  data-drop-target={card ? 'ally-card' : undefined}
+                  data-card-id={card?.instanceId}
                   className={`relative w-[3.6rem] h-[5rem] sm:w-[5rem] sm:h-[7rem] md:w-[7rem] md:h-[9.8rem] rounded-lg transition-all duration-200 ${
                     isOccupied
                       ? ''
@@ -480,6 +584,14 @@ export default function GameBoard({ onExit, deckComposition, playerName = 'Jugad
                         selected={selection.type === 'card-selected' && selection.cardId === card!.instanceId}
                         onSelect={selection.type === 'picking-ally' ? handleAllyCardSelect : handleTableCardSelect}
                       />
+                      {draggingConsumableTarget === 'carta_aliada' && dragOverTargetId === card.instanceId && (
+                        <motion.div
+                          initial={{ opacity: 0.3, scale: 0.92 }}
+                          animate={{ opacity: 1, scale: [1, 1.06, 1] }}
+                          transition={{ scale: { duration: 0.8, repeat: Infinity } }}
+                          className="absolute -inset-2 rounded-xl border-2 border-cyan-300 shadow-[0_0_24px_rgba(34,211,238,0.7)] pointer-events-none z-10"
+                        />
+                      )}
                       {game.playerTargetHighlightId === card!.instanceId && (
                         <motion.div
                           initial={{ opacity: 0, scale: 0.9 }}
@@ -534,13 +646,14 @@ export default function GameBoard({ onExit, deckComposition, playerName = 'Jugad
       <div className="absolute bottom-0 left-0 right-0 z-15 h-[22%]">
         <div className="w-full h-full flex flex-col items-center justify-center">
           <div className="text-[8px] sm:text-[10px] font-display text-amber-200/40 uppercase tracking-[0.2em] sm:tracking-[0.3em] mb-1 sm:mb-2 px-2 text-center">
-            {playerName} ({game.playerHand.length}) — arrastra a un hueco
+            {playerName} ({game.playerHand.length}) — arrastra cartas a mesa o consumibles a su objetivo
           </div>
           <div className="flex items-center justify-center gap-1 sm:gap-2 px-2 sm:px-8">
             <AnimatePresence>
               {game.playerHand.map((card, i) => {
                 const tableFull = game.playerTable.every(Boolean);
-                const canDrag = isPlayerTurn && !tableFull;
+                const isConsumible = card.definition.tipo === 'consumible';
+                const canDrag = isPlayerTurn && (isConsumible || !tableFull);
                 const isDragging = draggingCardId === card.instanceId;
                 return (
                   <motion.div
@@ -570,6 +683,17 @@ export default function GameBoard({ onExit, deckComposition, playerName = 'Jugad
                       disabled={!canDrag}
                       selected={false}
                       inHand
+                      onSelect={card.definition.tipo === 'consumible' ? (cardId) => {
+                        const skill = SKILLS[card.definition.habilidades[0]?.[0]];
+                        if (!skill) return;
+                        if (skill.objetivo === 'bug') {
+                          game.playerUseConsumable(cardId);
+                        } else if (skill.objetivo === 'carta_aliada') {
+                          setSelection({ type: 'consumable-picking-ally', cardId });
+                        } else if (skill.objetivo === 'carta_enemiga') {
+                          setSelection({ type: 'consumable-picking-enemy', cardId });
+                        }
+                      } : undefined}
                     />
                   </motion.div>
                 );

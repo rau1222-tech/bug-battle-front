@@ -75,7 +75,26 @@ const OFFLINE_PRESETS: DeckSummary[] = [
       { card_id: 'qa-tester', quantity: 2 }, { card_id: 'qa-lead', quantity: 2 },
     ],
   ),
+  summarize(
+    { id: 'offline-prueba-consumibles', name: 'Prueba Consumibles', cover_emoji: '🧪', is_preset: true, user_id: null },
+    [
+      { card_id: 'cafe-maquina', quantity: 6 }, { card_id: 'pr-aprobado', quantity: 4 },
+      { card_id: 'hotfix', quantity: 4 }, { card_id: 'senior-dev', quantity: 2 },
+      { card_id: 'fullstack', quantity: 1 }, { card_id: 'qa-tester', quantity: 2 },
+      { card_id: 'qa-lead', quantity: 1 },
+    ],
+  ),
 ];
+
+const LOCAL_TEST_PRESET = summarize(
+  { id: 'local-prueba-consumibles', name: 'Prueba Consumibles', cover_emoji: '🧪', is_preset: true, user_id: null },
+  [
+    { card_id: 'cafe-maquina', quantity: 6 }, { card_id: 'pr-aprobado', quantity: 4 },
+    { card_id: 'hotfix', quantity: 4 }, { card_id: 'senior-dev', quantity: 2 },
+    { card_id: 'fullstack', quantity: 1 }, { card_id: 'qa-tester', quantity: 2 },
+    { card_id: 'qa-lead', quantity: 1 },
+  ],
+);
 
 export function useDecks(userId: string | null | undefined) {
   const [decks, setDecks] = useState<DeckSummary[]>([]);
@@ -118,7 +137,8 @@ export function useDecks(userId: string | null | undefined) {
         byDeck.set(row.deck_id, arr);
       }
 
-      setDecks(deckRows.map((d) => summarize(d, byDeck.get(d.id) ?? [])));
+      const remoteDecks = deckRows.map((d) => summarize(d, byDeck.get(d.id) ?? []));
+      setDecks([...remoteDecks, LOCAL_TEST_PRESET]);
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : (err as { message?: string })?.message ?? 'Error de conexión';
       console.warn('Supabase fetch failed, using offline presets:', msg);

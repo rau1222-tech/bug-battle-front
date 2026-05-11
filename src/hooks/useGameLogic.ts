@@ -217,9 +217,9 @@ export function useGameLogic(playerComposition?: DeckComposition[]) {
       const targetIdx = s.botTable.findIndex((c) => c?.instanceId === targetId);
       if (targetIdx < 0) return s;
       const target = s.botTable[targetIdx]!;
-      const newEstres = target.estresActual + potenciaReal;
+      const nuevaCordura = target.cordura - potenciaReal;
       const newBotTable = [...s.botTable];
-      if (newEstres >= target.definition.estresLimite) {
+      if (nuevaCordura <= 0) {
         newBotTable[targetIdx] = null;
         return {
           ...s,
@@ -229,13 +229,13 @@ export function useGameLogic(playerComposition?: DeckComposition[]) {
           message: `💥 ${attacker.definition.nombre} destruyó a ${target.definition.nombre}! (-${attacker.definition.ataqueCoste}⚡)`,
         };
       }
-      newBotTable[targetIdx] = { ...target, estresActual: newEstres };
+      newBotTable[targetIdx] = { ...target, cordura: nuevaCordura };
       return {
         ...s,
         botTable: newBotTable,
         playerEnergy: s.playerEnergy - attacker.definition.ataqueCoste,
         playerTable: markUsed(s.playerTable, attackerId),
-        message: `🎯 ${attacker.definition.nombre} atacó con ${potenciaReal} de daño a ${target.definition.nombre}! Estrés: ${newEstres}/${target.definition.estresLimite} (-${attacker.definition.ataqueCoste}⚡)`,
+        message: `🎯 ${attacker.definition.nombre} atacó con ${potenciaReal} de daño a ${target.definition.nombre}! 🧠 Cordura: ${nuevaCordura}/${target.definition.corduraMax} (-${attacker.definition.ataqueCoste}⚡)`,
       };
     });
   }, []);
@@ -308,6 +308,23 @@ export function useGameLogic(playerComposition?: DeckComposition[]) {
             playerTable: markUsed(newPlayerTable, cardId),
             playerEnergy: s.playerEnergy - coste,
             message: `🤝 ${skill.nombre}: ${target.definition.nombre} recibe ${skill.efectoTipo} +${potencia} por ${duracion || 1} turno(s). (-${coste}⚡)`,
+          };
+        }
+        case 'CURAR_CORDURA': {
+          if (skill.objetivo !== 'carta_aliada') return s;
+          if (!targetId) return s;
+          const targetIdx = s.playerTable.findIndex((c) => c?.instanceId === targetId);
+          if (targetIdx < 0) return s;
+          const target = s.playerTable[targetIdx]!;
+          const nuevaCordura = Math.min(target.definition.corduraMax ?? 0, target.cordura + potencia);
+          const healed = { ...target, cordura: nuevaCordura };
+          const newPlayerTable = [...s.playerTable];
+          newPlayerTable[targetIdx] = healed;
+          return {
+            ...s,
+            playerTable: markUsed(newPlayerTable, cardId),
+            playerEnergy: s.playerEnergy - coste,
+            message: `☕ ${skill.nombre}: ${target.definition.nombre} recupera ${potencia} cordura! 🧠 ${nuevaCordura}/${target.definition.corduraMax ?? 0} (-${coste}⚡)`,
           };
         }
         default:
@@ -567,6 +584,100 @@ export function useGameLogic(playerComposition?: DeckComposition[]) {
     }
   }, [state.turn, state.gamePhase, botPlay]);
 
+  /** Player uses a consumable card from hand */
+  const playerUseConsumable = useCallback((cardId: string, targetId?: string) => {
+    setState((s) => {
+      if (s.gamePhase !== 'playing' || s.turn !== 'player') return s;
+      const card = s.playerHand.find((c) => c.instanceId === cardId);
+      if (!card || card.definition.tipo !== 'consumible') return s;
+      const habilidad = card.definition.habilidades[0];
+      if (!habilidad) return s;
+      const [skillId, potencia, coste, duracion] = habilidad;
+      const skill = SKILLS[skillId];
+      if (!skill) return s;
+      if (s.playerEnergy < coste) {
+        return { ...s, message: `⚠️ Necesitas ${coste}⚡ para usar ${skill.nombre}.` };
+      }
+
+      switch (skill.accionTipo) {
+        case 'DANIO_DIRECTO': {
+          if (skill.objetivo !== 'bug') return s;
+          const newHP = Math.max(0, s.bugComplexity - potencia);
+          const end = checkRoundEnd(newHP, 'player', s);
+          if (end) return { ...s, ...end, playerHand: s.playerHand.filter((c) => c.instanceId !== cardId), playerEnergy: s.playerEnergy - coste };
+          return {
+            ...s,
+            bugComplexity: newHP,
+            bugState: 'hit',
+            playerHand: s.playerHand.filter((c) => c.instanceId !== cardId),
+            playerEnergy: s.playerEnergy - coste,
+            message: `💊 ${skill.nombre}: Infligiste ${potencia} de daño! Bug: ${newHP}/${BUG_MAX_COMPLEXITY} (-${coste}⚡)`,
+          };
+        }
+        case 'DEVOLVER_MANO': {
+          if (skill.objetivo !== 'carta_enemiga') return s;
+          if (!targetId) return s;
+          const targetIdx = s.botTable.findIndex((c) => c?.instanceId === targetId);
+          if (targetIdx < 0) return s;
+          const target = s.botTable[targetIdx]!;
+          const newBotTable = [...s.botTable];
+          newBotTable[targetIdx] = null;
+          return {
+            ...s,
+            botTable: newBotTable,
+            botHand: [...s.botHand, { ...target, disponible: true }],
+            playerHand: s.playerHand.filter((c) => c.instanceId !== cardId),
+            playerEnergy: s.playerEnergy - coste,
+            message: `💊 ${skill.nombre}: ${target.definition.nombre} devuelta a la mano del rival! (-${coste}⚡)`,
+          };
+        }
+        case 'APLICAR_ESTADO': {
+          if (skill.objetivo !== 'carta_aliada') return s;
+          if (!targetId) return s;
+          if (!skill.efectoTipo) return s;
+          const targetIdx = s.playerTable.findIndex((c) => c?.instanceId === targetId);
+          if (targetIdx < 0) return s;
+          const target = s.playerTable[targetIdx]!;
+          const nuevoEfecto: Effect = {
+            tipo: skill.efectoTipo,
+            valor: potencia,
+            turnosRestantes: duracion || 1,
+          };
+          const buffed = { ...target, efectosActivos: [...target.efectosActivos, nuevoEfecto] };
+          const newPlayerTable = [...s.playerTable];
+          newPlayerTable[targetIdx] = buffed;
+          return {
+            ...s,
+            playerTable: newPlayerTable,
+            playerHand: s.playerHand.filter((c) => c.instanceId !== cardId),
+            playerEnergy: s.playerEnergy - coste,
+            message: `💊 ${skill.nombre}: ${target.definition.nombre} recibe ${skill.efectoTipo} +${potencia} por ${duracion || 1} turno(s). (-${coste}⚡)`,
+          };
+        }
+        case 'CURAR_CORDURA': {
+          if (skill.objetivo !== 'carta_aliada') return s;
+          if (!targetId) return s;
+          const targetIdx = s.playerTable.findIndex((c) => c?.instanceId === targetId);
+          if (targetIdx < 0) return s;
+          const target = s.playerTable[targetIdx]!;
+          const nuevaCordura = Math.min(target.definition.corduraMax ?? 0, target.cordura + potencia);
+          const healed = { ...target, cordura: nuevaCordura };
+          const newPlayerTable = [...s.playerTable];
+          newPlayerTable[targetIdx] = healed;
+          return {
+            ...s,
+            playerTable: newPlayerTable,
+            playerHand: s.playerHand.filter((c) => c.instanceId !== cardId),
+            playerEnergy: s.playerEnergy - coste,
+            message: `☕ ${skill.nombre}: ${target.definition.nombre} recupera ${potencia} cordura! 🧠 ${nuevaCordura}/${target.definition.corduraMax ?? 0} (-${coste}⚡)`,
+          };
+        }
+        default:
+          return s;
+      }
+    });
+  }, [checkRoundEnd]);
+
   const startNewRound = useCallback(() => {
     const pD = createDeck(compRef.current); const bD = createDeck(compRef.current);
     const { drawn: pH, remaining: pR } = drawFromDeck(pD, INITIAL_DRAW);
@@ -591,5 +702,5 @@ export function useGameLogic(playerComposition?: DeckComposition[]) {
 
   const restartGame = useCallback(() => setState(initState(compRef.current)), []);
 
-  return { ...state, playerAttackBug, playerAttackEnemy, playerUseSkill, playCardToTable, skipTurn, startNewRound, restartGame };
+  return { ...state, playerAttackBug, playerAttackEnemy, playerUseSkill, playerUseConsumable, playCardToTable, skipTurn, startNewRound, restartGame };
 }

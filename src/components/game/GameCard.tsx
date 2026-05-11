@@ -17,7 +17,7 @@ export default function GameCard({ card, isOpponent = false, index = 0, disabled
   const isProgramador = definition.tipo === 'programador';
 
   const handleClick = () => {
-    if (inHand) return; // Hand cards are drag-only
+    if (inHand && definition.tipo !== 'consumible') return; // Only consumibles can be clicked in hand
     if (!disabled && onSelect) {
       onSelect(card.instanceId);
     }
@@ -38,7 +38,7 @@ export default function GameCard({ card, isOpponent = false, index = 0, disabled
       whileHover={!disabled && !inHand ? { scale: 1.08, y: -8, transition: { duration: 0.2 } } : {}}
       onClick={handleClick}
       className={`relative select-none w-[3.6rem] h-[5rem] sm:w-[5rem] sm:h-[7rem] md:w-[7rem] md:h-[9.8rem] ${
-        inHand ? 'cursor-default' : !disabled ? 'cursor-pointer' : 'cursor-default'
+        inHand ? (definition.tipo === 'consumible' ? 'cursor-pointer' : 'cursor-grab') : !disabled ? 'cursor-pointer' : 'cursor-default'
       }`}
       style={{ zIndex: selected ? 50 : index + 1 }}
     >
@@ -56,9 +56,11 @@ export default function GameCard({ card, isOpponent = false, index = 0, disabled
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           className={`absolute -inset-1.5 rounded-xl border-2 pointer-events-none ${
-            isProgramador
-              ? 'border-emerald-400 shadow-[0_0_20px_rgba(52,211,153,0.4)]'
-              : 'border-amber-400 shadow-[0_0_20px_rgba(251,191,36,0.4)]'
+            definition.tipo === 'consumible'
+              ? 'border-cyan-400 shadow-[0_0_20px_rgba(34,211,238,0.4)]'
+              : isProgramador
+                ? 'border-emerald-400 shadow-[0_0_20px_rgba(52,211,153,0.4)]'
+                : 'border-amber-400 shadow-[0_0_20px_rgba(251,191,36,0.4)]'
           }`}
         />
       )}
@@ -76,7 +78,7 @@ export default function GameCard({ card, isOpponent = false, index = 0, disabled
       {/* TOP: Card Name */}
       <div className="absolute top-[4%] left-[10%] right-[18%] h-[7%] flex items-center justify-center pointer-events-none overflow-hidden">
         <span className={`text-[4px] sm:text-[5.5px] md:text-[7px] font-display font-bold tracking-wide text-center leading-none px-1 ${
-          isProgramador ? 'text-stone-900' : 'text-red-600'
+          definition.tipo === 'consumible' ? 'text-cyan-700' : isProgramador ? 'text-stone-900' : 'text-red-600'
         }`}>
           {definition.nombre.toUpperCase()}
         </span>
@@ -107,11 +109,13 @@ export default function GameCard({ card, isOpponent = false, index = 0, disabled
 
       {/* BOTTOM LEFT: Power */}
       <div className="absolute bottom-[3%] left-[10%] w-[28%] h-[8%] flex items-center justify-center pointer-events-none">
-        {isProgramador ? (
+        {definition.tipo === 'consumible' ? (
+          <span className="text-[6px] sm:text-[7.5px] md:text-[10px] font-display font-bold">🧪</span>
+        ) : definition.tipo === 'programador' ? (
           <span className={`text-[5px] sm:text-[6.5px] md:text-[8px] font-display font-bold transition-colors ${
-            calcularPotenciaReal(card) > definition.potencia
+            calcularPotenciaReal(card) > (definition.potencia ?? 0)
               ? 'text-emerald-500'
-              : calcularPotenciaReal(card) < definition.potencia
+              : calcularPotenciaReal(card) < (definition.potencia ?? 0)
                 ? 'text-red-500'
                 : 'text-stone-800'
           }`}>
@@ -140,20 +144,20 @@ export default function GameCard({ card, isOpponent = false, index = 0, disabled
         </motion.div>
       )}
 
-      {/* STRESS INDICATOR — only when on the table */}
-      {!inHand && definition.estresLimite > 0 && (
+      {/* CORDURA INDICATOR — only when on the table and not consumible */}
+      {!inHand && definition.corduraMax && definition.corduraMax > 0 && definition.tipo !== 'consumible' && (
         <div className="absolute top-[11%] left-[8%] right-[8%] flex flex-col items-center gap-[1px] pointer-events-none">
           <span className={`text-[4px] sm:text-[5px] md:text-[6.5px] font-display font-bold leading-none ${
-            card.estresActual === 0 ? 'text-emerald-600' : card.estresActual >= definition.estresLimite - 1 ? 'text-red-500' : 'text-amber-500'
+            card.cordura === definition.corduraMax ? 'text-emerald-600' : card.cordura <= 1 ? 'text-red-500' : 'text-amber-500'
           }`}>
-            ❤️ {card.estresActual}/{definition.estresLimite}
+            🧠 {card.cordura}
           </span>
           <div className="w-full h-[2px] sm:h-[3px] rounded-full overflow-hidden bg-stone-700/40">
             <div
               className="h-full rounded-full transition-all duration-300"
               style={{
-                width: `${Math.min(100, (card.estresActual / definition.estresLimite) * 100)}%`,
-                backgroundColor: card.estresActual === 0 ? 'transparent' : card.estresActual >= definition.estresLimite - 1 ? '#ef4444' : '#f59e0b',
+                width: `${Math.min(100, (card.cordura / definition.corduraMax) * 100)}%`,
+                backgroundColor: card.cordura === definition.corduraMax ? 'transparent' : card.cordura <= 1 ? '#ef4444' : '#f59e0b',
               }}
             />
           </div>
