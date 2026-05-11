@@ -382,7 +382,13 @@ export default function GameBoard({ onExit, deckComposition, playerName = 'Jugad
           }`}
         >
           {isPlayerTurn
-            ? (selection.type === 'picking-enemy' || selection.type === 'picking-ally' || draggingConsumableTarget !== null) ? '🎯 OBJETIVO' : `🟢 ${playerName.toUpperCase()}`
+            ? (selection.type === 'picking-enemy'
+              || selection.type === 'picking-ally'
+              || selection.type === 'consumable-picking-ally'
+              || selection.type === 'consumable-picking-enemy'
+              || draggingConsumableTarget !== null)
+              ? '🎯 OBJETIVO'
+              : `🟢 ${playerName.toUpperCase()}`
             : '🔴 RIVAL'}
         </motion.div>
 
@@ -426,7 +432,13 @@ export default function GameBoard({ onExit, deckComposition, playerName = 'Jugad
 
       {/* ===== Picking-target hint pill (only when choosing QA target) ===== */}
       <AnimatePresence>
-        {(selection.type === 'picking-enemy' || selection.type === 'picking-ally' || draggingConsumableTarget !== null) && (
+        {(
+          selection.type === 'picking-enemy'
+          || selection.type === 'picking-ally'
+          || selection.type === 'consumable-picking-ally'
+          || selection.type === 'consumable-picking-enemy'
+          || draggingConsumableTarget !== null
+        ) && (
           <motion.div
             initial={{ opacity: 0, y: -8 }}
             animate={{ opacity: 1, y: 0 }}
@@ -440,6 +452,10 @@ export default function GameBoard({ onExit, deckComposition, playerName = 'Jugad
                   ? '🧪 Suelta sobre una carta aliada'
                   : draggingConsumableTarget === 'carta_enemiga'
                     ? '🧪 Suelta sobre una carta rival'
+                    : selection.type === 'consumable-picking-ally'
+                      ? '🧪 Elige una carta aliada para usar el consumible'
+                      : selection.type === 'consumable-picking-enemy'
+                        ? '🧪 Elige una carta rival para usar el consumible'
                     : selection.type === 'picking-ally'
                 ? '👆 Elige carta aliada para aplicar el efecto'
                 : selection.type === 'picking-enemy' && selection.actionType === 'attack-enemy'
@@ -492,7 +508,11 @@ export default function GameBoard({ onExit, deckComposition, playerName = 'Jugad
             Bot
           </div>
           <div className={`flex items-end justify-center gap-1 sm:gap-3 min-h-[5rem] sm:min-h-[7rem] md:min-h-[10rem] px-1 sm:px-4 transition-all duration-300 ${
-            selection.type === 'picking-enemy' || draggingConsumableTarget === 'carta_enemiga' ? 'ring-2 ring-red-500/50 rounded-xl bg-red-900/10' : ''
+            selection.type === 'picking-enemy'
+            || selection.type === 'consumable-picking-enemy'
+            || draggingConsumableTarget === 'carta_enemiga'
+              ? 'ring-2 ring-red-500/50 rounded-xl bg-red-900/10'
+              : ''
           }`}>
             {game.botTable.map((card, i) => (
               <div
@@ -508,8 +528,8 @@ export default function GameBoard({ onExit, deckComposition, playerName = 'Jugad
                       isOpponent
                       index={i}
                       selected={false}
-                      disabled={selection.type !== 'picking-enemy'}
-                      onSelect={selection.type === 'picking-enemy' ? handleBotCardSelect : undefined}
+                      disabled={selection.type !== 'picking-enemy' && selection.type !== 'consumable-picking-enemy'}
+                      onSelect={selection.type === 'picking-enemy' || selection.type === 'consumable-picking-enemy' ? handleBotCardSelect : undefined}
                     />
                     {game.botHighlightId === card.instanceId && (
                       <motion.div
@@ -519,7 +539,6 @@ export default function GameBoard({ onExit, deckComposition, playerName = 'Jugad
                         className="absolute -inset-2 rounded-xl border-2 border-amber-300 shadow-[0_0_28px_rgba(252,211,77,0.7)] pointer-events-none z-10"
                       />
                     )}
-                  </>
                     {draggingConsumableTarget === 'carta_enemiga' && dragOverTargetId === card.instanceId && (
                       <motion.div
                         initial={{ opacity: 0.3, scale: 0.92 }}
@@ -528,6 +547,7 @@ export default function GameBoard({ onExit, deckComposition, playerName = 'Jugad
                         className="absolute -inset-2 rounded-xl border-2 border-cyan-300 shadow-[0_0_24px_rgba(34,211,238,0.7)] pointer-events-none z-10"
                       />
                     )}
+                  </>
                 ) : (
                   <div className="w-full h-full rounded-lg border-2 border-dashed border-amber-600/25 bg-amber-900/5" />
                 )}
@@ -569,7 +589,7 @@ export default function GameBoard({ onExit, deckComposition, playerName = 'Jugad
                             ? 'border-amber-400/80 bg-amber-700/20 shadow-[0_0_18px_rgba(217,180,103,0.35)] scale-105'
                             : 'border-amber-600/40'
                         }`
-                  }`}
+                  } ${selection.type === 'consumable-picking-ally' || draggingConsumableTarget === 'carta_aliada' ? 'ring-2 ring-cyan-500/50 rounded-xl bg-cyan-900/10' : ''}`}
                 >
                   {isOccupied ? (
                     <>
@@ -579,10 +599,11 @@ export default function GameBoard({ onExit, deckComposition, playerName = 'Jugad
                         disabled={
                           !isPlayerTurn
                           || selection.type === 'picking-enemy'
+                          || selection.type === 'consumable-picking-enemy'
                           || (selection.type === 'picking-ally' && selection.cardId === card!.instanceId)
                         }
                         selected={selection.type === 'card-selected' && selection.cardId === card!.instanceId}
-                        onSelect={selection.type === 'picking-ally' ? handleAllyCardSelect : handleTableCardSelect}
+                        onSelect={selection.type === 'picking-ally' || selection.type === 'consumable-picking-ally' ? handleAllyCardSelect : handleTableCardSelect}
                       />
                       {draggingConsumableTarget === 'carta_aliada' && dragOverTargetId === card.instanceId && (
                         <motion.div
