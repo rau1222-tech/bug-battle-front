@@ -6,6 +6,7 @@ import {
   BUG_MAX_COMPLEXITY,
   INITIAL_DRAW,
   TABLE_MAX,
+  MAX_HAND_SIZE,
   MAX_ENERGY_CAP,
   ENERGY_PER_TURN,
   ENERGY_BONUS_HIT,
@@ -374,7 +375,7 @@ export function useGameLogic(playerComposition?: DeckComposition[]) {
           const bonus = s.lastAttacker === 'bot' ? ENERGY_BONUS_HIT : 0;
           const newEnergy = s.botEnergy + ENERGY_PER_TURN + bonus;
           const resetTable = s.botTable.map((c) => c ? { ...c, disponible: true } : null);
-          if (s.botDeck.length === 0) return { ...s, botEnergy: newEnergy, botMaxEnergy: newEnergy, botTable: resetTable, message: `🤖 Bot gana ${ENERGY_PER_TURN + bonus}⚡` };
+          if (s.botDeck.length === 0 || s.botHand.length >= MAX_HAND_SIZE) return { ...s, botEnergy: newEnergy, botMaxEnergy: newEnergy, botTable: resetTable, message: s.botHand.length >= MAX_HAND_SIZE ? `🤖 Bot tiene la mano llena (+${ENERGY_PER_TURN + bonus}⚡)` : `🤖 Bot gana ${ENERGY_PER_TURN + bonus}⚡` };
           const { drawn, remaining } = drawFromDeck(s.botDeck, 1);
           return {
             ...s,
@@ -564,7 +565,7 @@ export function useGameLogic(playerComposition?: DeckComposition[]) {
       setState((s) => {
         const bonus = s.lastAttacker === 'player' ? ENERGY_BONUS_HIT : 0;
         const newEnergy = s.playerEnergy + ENERGY_PER_TURN + bonus;
-        if (s.playerDeck.length === 0) return { ...s, playerEnergy: newEnergy, playerMaxEnergy: newEnergy };
+        if (s.playerDeck.length === 0 || s.playerHand.length >= MAX_HAND_SIZE) return { ...s, playerEnergy: newEnergy, playerMaxEnergy: newEnergy, message: s.playerHand.length >= MAX_HAND_SIZE ? `⚠️ Mano llena — no robas carta (+${ENERGY_PER_TURN + bonus}⚡)` : undefined ?? s.message };
         const { drawn, remaining } = drawFromDeck(s.playerDeck, 1);
         return { ...s, playerHand: [...s.playerHand, ...drawn], playerDeck: remaining, playerEnergy: newEnergy, playerMaxEnergy: newEnergy };
       });

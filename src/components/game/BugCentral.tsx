@@ -26,10 +26,10 @@ export default function BugCentral({ complexity, bugState, id }: BugCentralProps
         className="relative w-24 h-24 sm:w-40 sm:h-40 md:w-56 md:h-56 flex items-center justify-center"
         animate={
           bugState === 'hit'
-            ? { x: [0, -14, 14, -7, 7, 0], scale: [1, 0.85, 1.15, 1] }
+            ? { x: [0, -14, 14, -7, 7, 0], scale: [1, 0.85, 1.15, 1], opacity: 1 }
             : bugState === 'death'
             ? { scale: [1, 1.3, 0], opacity: [1, 1, 0] }
-            : {}
+            : { scale: 1, opacity: 1 }
         }
         transition={{ duration: 0.4 }}
       >

@@ -4,7 +4,6 @@ import { useGameLogic } from '@/hooks/useGameLogic';
 import { TABLE_MAX, SKILLS } from '@/constants';
 import BugCentral from './BugCentral';
 import GameCard from './GameCard';
-import CardBack from './CardBack';
 import ActionMenu from './ActionMenu';
 import DeckPile from './DeckPile';
 import ActionLog from './ActionLog';
@@ -647,19 +646,43 @@ export default function GameBoard({ onExit, deckComposition, playerName = 'Jugad
         </div>
       </div>
 
-      {/* ===== BOT HAND — face-down at top ===== */}
-      <div className="absolute top-[8%] sm:top-[7%] left-1/2 -translate-x-1/2 z-10 hidden sm:block">
-        <div className="flex items-center justify-center gap-1">
-          <AnimatePresence>
-            {game.botHand.map((card, i) => (
-              <div key={card.instanceId} style={{ transform: `translateY(${Math.abs(i - (game.botHand.length - 1) / 2) * 2}px)` }}>
-                <CardBack index={i} size="sm" />
+      {/* ===== BOT HAND — compact indicator at top ===== */}
+      <div className="absolute top-[8%] sm:top-[7%] left-1/2 -translate-x-1/2 z-10">
+        <div className="flex items-center gap-2">
+          {/* Mini stacked cards */}
+          <div className="relative w-8 h-11 sm:w-10 sm:h-14">
+            {Array.from({ length: Math.min(game.botHand.length, 3) }).map((_, i) => (
+              <div
+                key={i}
+                className="absolute rounded-md overflow-hidden border border-amber-900/60 shadow-md"
+                style={{
+                  width: '100%',
+                  height: '100%',
+                  top: -i * 2,
+                  left: -i * 1.5,
+                  zIndex: i,
+                  background:
+                    'repeating-linear-gradient(45deg, hsl(30 35% 18%), hsl(30 35% 18%) 4px, hsl(30 40% 22%) 4px, hsl(30 40% 22%) 8px)',
+                }}
+              >
+                <div className="absolute inset-1 rounded-sm border border-amber-700/40 flex items-center justify-center">
+                  <span className="text-amber-300/50 text-xs sm:text-sm select-none">🐛</span>
+                </div>
+                <div className="absolute inset-0 bg-gradient-to-br from-amber-100/5 via-transparent to-black/30 pointer-events-none" />
               </div>
             ))}
-          </AnimatePresence>
-        </div>
-        <div className="text-[10px] font-display text-amber-200/40 uppercase tracking-[0.3em] mt-1 text-center">
-          Mano rival ({game.botHand.length})
+          </div>
+          {/* Count badge */}
+          <motion.div
+            key={game.botHand.length}
+            initial={{ scale: 1.3 }}
+            animate={{ scale: 1 }}
+            transition={{ type: 'spring', stiffness: 300, damping: 15 }}
+            className="flex items-center gap-1.5 bg-black/50 backdrop-blur-sm px-2.5 py-1 rounded-full border border-amber-900/40"
+          >
+            <span className="text-[9px] sm:text-[10px] font-display text-amber-200/50 uppercase tracking-wider">Rival</span>
+            <span className="text-xs sm:text-sm font-display text-amber-100 font-bold tabular-nums">×{game.botHand.length}</span>
+          </motion.div>
         </div>
       </div>
 

@@ -163,6 +163,7 @@ export const BUG_MAX_COMPLEXITY = 10;
 export const DECK_SIZE = 20;
 export const INITIAL_DRAW = 4;
 export const TABLE_MAX = 4;
+export const MAX_HAND_SIZE = 6;
 export const MAX_ENERGY_CAP = 10;
 export const ENERGY_PER_TURN = 3;
 export const ENERGY_BONUS_HIT = 1;
