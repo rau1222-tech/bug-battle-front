@@ -21,6 +21,7 @@ Una partida consta de **3 rondas** (best of 3). Cada ronda tiene un **Bug** con 
 ### Turno del jugador
 
 1. **Inicio**: roba 1 carta del mazo (excepto el primer turno) y recibe energía.
+  - Si la mano ya tiene 6 cartas, no roba carta en ese turno.
 2. **Fase de acción libre** (repetible mientras haya cartas disponibles):
    - Colocar cartas de la mano al tablero (máximo 4 slots).
    - Seleccionar cualquier carta propia en el tablero → se abre un menú de acciones:
@@ -115,6 +116,7 @@ Las habilidades están definidas en un catálogo centralizado (`SKILLS`). Cada c
 | Complejidad del Bug | 10 |
 | Tamaño del mazo | 20 |
 | Robo inicial | 4 cartas |
+| Límite de mano | 6 cartas |
 | Slots en mesa | 4 |
 | Energía por turno | 3 |
 | Bonus por último golpe | +1 |
@@ -180,18 +182,17 @@ Las habilidades están definidas en un catálogo centralizado (`SKILLS`). Cada c
 
 ---
 
-## ❌ 5. Visual del tablero: mano del bot ocupa demasiado espacio
+## ✅ 5. Visual del tablero: mano del bot ocupa demasiado espacio
 
-### Pendiente
+### Implementado
 
-Las cartas de la **mano del rival** (boca abajo, parte superior) ocupan mucho espacio visual cuando el bot acumula varias cartas. En dispositivos móviles comprimen el resto del tablero.
+Se reemplazó la fila de cartas de la **mano del rival** por un indicador compacto con estética consistente al tablero actual.
 
-### Propuesta
+### Resultado
 
-Reemplazar la fila de cartas boca abajo de la mano del bot por una **zona compacta** (esquina superior o lateral) con:
-- Una sola carta boca abajo como representante visual.
-- Un badge con el **número de cartas** en mano del bot (ej: `×3`).
-- Esto libera espacio vertical para que las cartas del tablero rival (con sus stats de potencia, cordura, efectos) se vean con mayor claridad.
+- Se muestra una pila visual compacta (mini cartas) en la zona superior.
+- Se muestra un badge con el **número de cartas** en mano del bot (ej: `×3`).
+- La UI libera espacio vertical para visualizar mejor el tablero rival, incluyendo en pantallas pequeñas.
 
 ---
 

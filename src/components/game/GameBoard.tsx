@@ -399,33 +399,38 @@ export default function GameBoard({ onExit, deckComposition, playerName = 'Jugad
       </div>
 
       {/* ===== Energy indicators ===== */}
-      <div className="absolute top-11 sm:top-14 right-2 sm:right-6 z-20 flex flex-col items-end gap-1">
+      <div className="absolute top-11 sm:top-14 right-2 sm:right-6 z-20 flex flex-col items-end gap-1.5 sm:gap-2">
+        {/* Player energy */}
         <motion.div
           key={`p-energy-${game.playerEnergy}-${game.playerMaxEnergy}`}
-          initial={{ scale: 1.15 }}
+          initial={{ scale: 1.2 }}
           animate={{ scale: 1 }}
-          className="flex items-center gap-0.5 bg-black/40 backdrop-blur-sm px-2 py-0.5 rounded-full border border-emerald-700/30"
+          transition={{ type: 'spring', stiffness: 300, damping: 18 }}
+          className="flex items-center gap-1.5 sm:gap-2"
         >
-          <span className="text-[9px] sm:text-xs font-display text-emerald-300/70 mr-0.5">{playerName}</span>
-          {Array.from({ length: game.playerMaxEnergy }).map((_, i) => (
-            <motion.span
-              key={i}
-              initial={i < game.playerEnergy ? { scale: 0 } : {}}
-              animate={i < game.playerEnergy ? { scale: 1 } : {}}
-              transition={{ delay: i * 0.04 }}
-              className={`text-[9px] sm:text-xs ${i < game.playerEnergy ? '' : 'opacity-20 grayscale'}`}
-            >
-              ⚡
-            </motion.span>
-          ))}
-          <span className="text-[9px] sm:text-xs font-display text-amber-100/60 tabular-nums ml-0.5">{game.playerEnergy}/{game.playerMaxEnergy}</span>
+          <span className="text-[9px] sm:text-xs font-display text-emerald-300/80 drop-shadow-sm">{playerName}</span>
+          <div className="relative w-10 h-10 sm:w-14 sm:h-14 flex items-center justify-center rounded-lg border-2 border-emerald-400/70 bg-gradient-to-b from-emerald-900/80 to-emerald-950/90 shadow-[0_0_18px_rgba(52,211,153,0.25),inset_0_1px_0_rgba(255,255,255,0.1)] backdrop-blur-sm">
+            <span className="absolute -top-1.5 sm:-top-2 left-1/2 -translate-x-1/2 text-xs sm:text-sm">⚡</span>
+            <span className="text-lg sm:text-2xl font-display font-black text-emerald-300 tabular-nums drop-shadow-[0_0_8px_rgba(52,211,153,0.5)]">
+              {game.playerEnergy}
+            </span>
+            <span className="absolute -bottom-1 sm:-bottom-1.5 left-1/2 -translate-x-1/2 text-[7px] sm:text-[9px] font-display text-emerald-400/60 tabular-nums bg-emerald-950/80 px-1 rounded-sm">
+              /{game.playerMaxEnergy}
+            </span>
+          </div>
         </motion.div>
-        <div className="flex items-center gap-0.5 bg-black/40 backdrop-blur-sm px-2 py-0.5 rounded-full border border-red-700/30">
-          <span className="text-[9px] sm:text-xs font-display text-red-300/70 mr-0.5">BOT</span>
-          {Array.from({ length: game.botMaxEnergy }).map((_, i) => (
-            <span key={i} className={`text-[9px] sm:text-xs ${i < game.botEnergy ? '' : 'opacity-20 grayscale'}`}>⚡</span>
-          ))}
-          <span className="text-[9px] sm:text-xs font-display text-amber-100/60 tabular-nums ml-0.5">{game.botEnergy}/{game.botMaxEnergy}</span>
+        {/* Bot energy */}
+        <div className="flex items-center gap-1.5 sm:gap-2">
+          <span className="text-[9px] sm:text-xs font-display text-red-300/80 drop-shadow-sm">BOT</span>
+          <div className="relative w-10 h-10 sm:w-14 sm:h-14 flex items-center justify-center rounded-lg border-2 border-red-400/70 bg-gradient-to-b from-red-900/80 to-red-950/90 shadow-[0_0_18px_rgba(239,68,68,0.25),inset_0_1px_0_rgba(255,255,255,0.1)] backdrop-blur-sm">
+            <span className="absolute -top-1.5 sm:-top-2 left-1/2 -translate-x-1/2 text-xs sm:text-sm">⚡</span>
+            <span className="text-lg sm:text-2xl font-display font-black text-red-300 tabular-nums drop-shadow-[0_0_8px_rgba(239,68,68,0.5)]">
+              {game.botEnergy}
+            </span>
+            <span className="absolute -bottom-1 sm:-bottom-1.5 left-1/2 -translate-x-1/2 text-[7px] sm:text-[9px] font-display text-red-400/60 tabular-nums bg-red-950/80 px-1 rounded-sm">
+              /{game.botMaxEnergy}
+            </span>
+          </div>
         </div>
       </div>
 

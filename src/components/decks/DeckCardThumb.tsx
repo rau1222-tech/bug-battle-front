@@ -42,7 +42,9 @@ export default function DeckCardThumb({ def, quantity, onClick, disabled, small 
             <span className={`text-[8px] font-display tracking-wider px-1 py-px rounded ${tag} uppercase`}>
               {def.tipo}
             </span>
-            <span className="text-[10px] font-body text-amber-200/70">⚡{def.potencia}</span>
+            <span className="inline-flex items-center gap-px text-[10px] font-display font-bold text-amber-100 bg-amber-700/60 rounded px-1 py-px">
+              ⚡{def.coste}
+            </span>
           </div>
         </div>
         {quantity !== undefined && quantity > 0 && (

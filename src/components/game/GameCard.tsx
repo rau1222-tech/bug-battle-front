@@ -127,10 +127,13 @@ export default function GameCard({ card, isOpponent = false, index = 0, disabled
       </div>
 
       {/* BOTTOM RIGHT: Cost */}
-      <div className="absolute bottom-[3%] right-[10%] w-[28%] h-[8%] flex items-center justify-center pointer-events-none">
-        <span className="text-[4px] sm:text-[5px] md:text-[7px] leading-none">
-          {'⚡'.repeat(definition.coste)}
-        </span>
+      <div className="absolute bottom-[2%] right-[8%] w-[30%] h-[10%] flex items-center justify-center pointer-events-none">
+        <div className="flex items-center justify-center gap-[1px] bg-gradient-to-b from-amber-700/80 to-amber-900/90 rounded-[3px] sm:rounded px-[3px] py-[1px] sm:px-1.5 sm:py-0.5 border border-amber-400/50 shadow-[0_0_6px_rgba(251,191,36,0.3)]">
+          <span className="text-[5px] sm:text-[7px] md:text-[9px] leading-none">⚡</span>
+          <span className="text-[6px] sm:text-[8px] md:text-[11px] font-display font-black text-amber-100 leading-none tabular-nums">
+            {definition.coste}
+          </span>
+        </div>
       </div>
 
       {/* EFFECTS INDICATOR — show if card has active effects */}

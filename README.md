@@ -96,6 +96,7 @@ supabase/
 - **Objetivo**: Reducir la complejidad del Bug (10 HP) a 0 antes que el bot.
 - **Formato**: Mejor de 3 rondas. El primero en ganar 2 rondas gana la partida.
 - **Mano inicial**: 4 cartas. Se roba 1 carta por turno (excepto el primero).
+- **Límite de mano**: Máximo 6 cartas. Si la mano está llena, no se roba carta ese turno.
 - **Slots de mesa**: Cada jugador tiene 4 espacios para colocar cartas.
 - **Tamaño de mazo**: Exactamente 20 cartas (máx. 2 copias por carta en mazos de usuario).
 
