@@ -1,144 +1,24 @@
-import { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
-import GameBoard from '@/components/game/GameBoard';
-import DeckSelectorScreen from '@/components/decks/DeckSelectorScreen';
-import DeckBuilderScreen from '@/components/decks/DeckBuilderScreen';
-import GachaScreen from '@/components/gacha/GachaScreen';
-import AuthScreen from '@/components/auth/AuthScreen';
 import ProfileMenu from '@/components/auth/ProfileMenu';
-import PickNameScreen from '@/components/auth/PickNameScreen';
-import { useAuth } from '@/hooks/useAuth';
-import { useProfile } from '@/hooks/useProfile';
-import { useDecks, getActiveDeckId, type DeckSummary } from '@/hooks/useDecks';
+import { getActiveDeckId, useDecks } from '@/hooks/useDecks';
+import { useAuthContext } from '@/contexts/AuthContext';
+import { ROUTES } from '@/routes';
+import { useNavigate } from 'react-router-dom';
 
-type Screen = 'menu' | 'deck-selector' | 'deck-builder' | 'game-bot' | 'gacha';
+export default function HomePage() {
+  const navigate = useNavigate();
+  const { user, profile, signOut } = useAuthContext();
+  const { decks } = useDecks(user.id);
 
-export default function Index() {
-  const [screen, setScreen] = useState<Screen>('menu');
-  const [editing, setEditing] = useState<DeckSummary | null>(null);
-  const [activeComposition, setActiveComposition] = useState<{ card_id: string; quantity: number }[] | undefined>(undefined);
-
-  const { user, loading: authLoading, signInWithEmail, signUpWithEmail, signInWithGoogle, signOut } = useAuth();
-  const { profile, needsSetup, loading: profileLoading, createProfile } = useProfile(user);
-  const { decks, refresh } = useDecks(user?.id);
-
-  const playerName = profile?.display_name ?? 'Jugador';
-
-  // Resolve active deck composition before launching game
-  const launchGame = (deckId: string) => {
-    const deck = decks.find((d) => d.id === deckId);
-    if (deck) {
-      setActiveComposition(deck.cards);
-      setScreen('game-bot');
-    }
-  };
-
-  // From "Debug Local": go to selector if no active deck, else launch directly
   const handleDebugLocal = () => {
     const activeId = getActiveDeckId();
     const active = activeId ? decks.find((d) => d.id === activeId) : null;
     if (active) {
-      setActiveComposition(active.cards);
-      setScreen('game-bot');
+      navigate(ROUTES.PLAY, { state: { composition: active.cards } });
     } else {
-      setScreen('deck-selector');
+      navigate(ROUTES.DECKS);
     }
   };
-
-  // Show loading spinner while checking auth or profile
-  if (authLoading || (user && profileLoading)) {
-    return (
-      <div className="h-[100dvh] flex items-center justify-center bg-[hsl(220,20%,6%)] bg-grid-pattern">
-        <div className="text-cyan-300/50 font-display text-sm animate-pulse tracking-wider">Cargando...</div>
-      </div>
-    );
-  }
-
-  // Show auth screen if not logged in
-  if (!user) {
-    return (
-      <AuthScreen
-        onSignInEmail={async (email, password) => {
-          const err = await signInWithEmail(email, password);
-          return { error: err?.message ?? null };
-        }}
-        onSignUpEmail={async (email, password) => {
-          const err = await signUpWithEmail(email, password);
-          return { error: err?.message ?? null };
-        }}
-        onSignInGoogle={async () => {
-          const err = await signInWithGoogle();
-          return { error: err?.message ?? null };
-        }}
-      />
-    );
-  }
-
-  // Show name picker for new users (Google sign-in without profile)
-  if (needsSetup) {
-    const meta = user.user_metadata ?? {};
-    const suggestedName = meta.full_name ?? meta.name ?? '';
-    const avatarUrl = meta.avatar_url ?? meta.picture ?? null;
-    return (
-      <PickNameScreen
-        suggestedName={suggestedName}
-        avatarUrl={avatarUrl}
-        onConfirm={createProfile}
-      />
-    );
-  }
-
-  if (screen === 'game-bot') {
-    return <GameBoard deckComposition={activeComposition} onExit={() => setScreen('menu')} playerName={playerName} />;  
-  }
-
-  if (screen === 'gacha') {
-    return <GachaScreen onBack={() => setScreen('menu')} />;
-  }
-
-  if (screen === 'deck-selector') {
-    return (
-      <DeckSelectorScreen
-        onBack={() => setScreen('menu')}
-        onPlay={launchGame}
-        onCreate={() => {
-          setEditing(null);
-          setScreen('deck-builder');
-        }}
-        onEdit={(deck) => {
-          setEditing(deck);
-          setScreen('deck-builder');
-        }}
-      />
-    );
-  }
-
-  if (screen === 'deck-builder') {
-    if (!user) {
-      return (
-        <div className="h-[100dvh] flex items-center justify-center bg-stone-950 text-amber-200 font-display flex-col gap-4">
-          <p>Se necesita conexión para crear/editar mazos.</p>
-          <button
-            onClick={() => setScreen('deck-selector')}
-            className="px-4 py-2 rounded-lg bg-amber-700/70 text-amber-100 hover:bg-amber-600/70 border border-amber-500/30 font-display text-sm"
-          >
-            ← Volver a mazos
-          </button>
-        </div>
-      );
-    }
-    return (
-      <DeckBuilderScreen
-        userId={user.id}
-        editing={editing}
-        onBack={() => setScreen('deck-selector')}
-        onSaved={async () => {
-          await refresh();
-          setScreen('deck-selector');
-        }}
-      />
-    );
-  }
 
   return (
     <div className="h-[100dvh] w-full flex flex-col items-center justify-center relative overflow-hidden bg-[hsl(220,20%,6%)] bg-grid-pattern">
@@ -217,7 +97,7 @@ export default function Index() {
               <motion.button
                 whileHover={{ scale: 1.03 }}
                 whileTap={{ scale: 0.97 }}
-                onClick={() => setScreen('gacha')}
+                onClick={() => navigate(ROUTES.GACHA)}
                 className="h-14 flex flex-col items-center justify-center gap-1 rounded-md bg-gradient-to-b from-purple-600/30 to-purple-900/30 text-purple-200 hover:from-purple-500/40 hover:to-purple-800/40 border border-purple-500/25 shadow-[0_0_15px_-5px_hsl(260,80%,60%,0.2)] transition-all hover:shadow-[0_0_20px_-5px_hsl(260,80%,60%,0.4)] hover:border-purple-400/40"
               >
                 <span className="text-xl">📦</span>
@@ -227,7 +107,7 @@ export default function Index() {
               <motion.button
                 whileHover={{ scale: 1.03 }}
                 whileTap={{ scale: 0.97 }}
-                onClick={() => setScreen('deck-selector')}
+                onClick={() => navigate(ROUTES.DECKS)}
                 className="h-14 flex flex-col items-center justify-center gap-1 rounded-md bg-gradient-to-b from-emerald-600/30 to-emerald-900/30 text-emerald-200 hover:from-emerald-500/40 hover:to-emerald-800/40 border border-emerald-500/25 shadow-[0_0_15px_-5px_hsl(150,80%,45%,0.2)] transition-all hover:shadow-[0_0_20px_-5px_hsl(150,80%,45%,0.4)] hover:border-emerald-400/40"
               >
                 <span className="text-xl">🃏</span>
@@ -245,8 +125,8 @@ export default function Index() {
         </div>
       </motion.div>
 
-      {/* Profile menu — top right */}
-      {profile && <ProfileMenu profile={profile} email={user?.email} onSignOut={signOut} />}
+      {/* Profile menu - top right */}
+      <ProfileMenu profile={profile} email={user.email} onSignOut={() => { void signOut(); }} />
     </div>
   );
 }

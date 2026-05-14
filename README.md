@@ -1,8 +1,8 @@
 # 🐛 Bug Battle
 
-**Bug Battle** es un juego de cartas coleccionables (CCG) con temática de desarrollo de software. Construye mazos de programadores y QA, abre sobres para reclutar cartas y combate por turnos contra una IA para derrotar bugs.
+**Bug Battle** es un juego de cartas coleccionables (CCG) con temática de desarrollo de software. Construye mazos de programadores, QA y consumibles, abre sobres para reclutar cartas y combate por turnos contra una IA para derrotar bugs.
 
-> Estado actual: **Alpha** — Modo vs IA funcional con sistema de energía, habilidades especiales, efectos temporales, gacha y autenticación. PvP online próximamente.
+> Estado actual: **Alpha** — Modo vs IA funcional con sistema de energía, habilidades especiales, efectos temporales, cartas consumibles, sistema de cordura, gacha, routing SPA y autenticación. PvP online próximamente.
 
 ---
 
@@ -10,6 +10,7 @@
 
 - [Tech Stack](#tech-stack)
 - [Estructura del Proyecto](#estructura-del-proyecto)
+- [Routing](#routing)
 - [Autenticación y Perfil](#autenticación-y-perfil)
 - [Mecánicas de Juego](#mecánicas-de-juego)
 - [Cartas](#cartas)
@@ -47,7 +48,7 @@
 src/
 ├── assets/              # Imágenes y recursos visuales
 ├── components/
-│   ├── auth/            # AuthScreen, PickNameScreen, ProfileMenu
+│   ├── auth/            # AuthScreen, PickNameScreen, ProfileMenu, AuthGuard
 │   ├── decks/           # DeckSelectorScreen, DeckBuilderScreen, DeckCardThumb
 │   ├── gacha/           # GachaScreen (apertura de sobres)
 │   ├── game/            # GameBoard, GameCard, CardBack, BugCentral, ActionLog, ActionMenu, DeckPile
@@ -55,27 +56,61 @@ src/
 │   └── NavLink.tsx      # Wrapper de navegación con soporte activeClassName
 ├── constants/
 │   ├── cards.ts         # CardTemplate, CardInstance, CARD_DEFINITIONS, constantes de juego
-│   ├── skills.ts        # Skill interface, catálogo SKILLS (Par Programming, QA Testing, Automatización)
+│   ├── skills.ts        # Skill interface, catálogo SKILLS (Par Programming, QA Testing, Automatización, Cafeína, Motivación, Parche Rápido)
 │   ├── effects.ts       # EffectType, Effect interface (buff_ataque, debuff_ataque, escudo)
 │   └── index.ts         # Barrel de re-exportación
+├── contexts/
+│   └── AuthContext.tsx   # Contexto de autenticación (user, profile, signOut)
 ├── hooks/
 │   ├── useAuth.ts       # Autenticación (email, Google, anónimo) con Supabase
 │   ├── useAnonAuth.ts   # Autenticación anónima legacy
 │   ├── useProfile.ts    # Perfil de usuario (display_name, avatar) con cache local
 │   ├── useCollection.ts # Colección de cartas y monedas (localStorage)
 │   ├── useDecks.ts      # CRUD de mazos + mazo activo
-│   └── useGameLogic.ts  # Motor de juego: turnos, energía, IA, efectos
+│   └── useGameLogic.ts  # Motor de juego: turnos, energía, IA, cordura, consumibles
 ├── integrations/
 │   └── supabase/        # Cliente Supabase y tipos generados
 ├── lib/
 │   └── utils.ts         # Utilidades (cn para clases)
 ├── pages/
-│   ├── Index.tsx         # Menú principal y router de pantallas
+│   ├── HomePage.tsx      # Menú principal
+│   ├── LoginPage.tsx     # Pantalla de login/registro
+│   ├── SetupPage.tsx     # Elección de nombre de usuario
+│   ├── PlayPage.tsx      # Partida vs IA (wrapper de GameBoard)
+│   ├── DecksPage.tsx     # Selector de mazos
+│   ├── DeckEditorPage.tsx# Creación/edición de mazos
+│   ├── GachaPage.tsx     # Reclutar (apertura de sobres)
 │   └── NotFound.tsx      # Página 404
+├── routes.ts            # Constantes de rutas centralizadas
 └── test/                # Setup y tests de ejemplo
 supabase/
 └── migrations/          # Esquema SQL, triggers, RLS y datos semilla
 ```
+
+---
+
+## Routing
+
+La aplicación usa **React Router DOM v6** con rutas centralizadas en `src/routes.ts` para facilitar cambios futuros.
+
+| Ruta | Página | Descripción |
+|------|--------|-------------|
+| `/` | `HomePage` | Menú principal |
+| `/login` | `LoginPage` | Login / Registro |
+| `/setup` | `SetupPage` | Elegir nombre de usuario |
+| `/play` | `PlayPage` | Partida vs IA |
+| `/decks` | `DecksPage` | Selector de mazos |
+| `/decks/new` | `DeckEditorPage` | Crear mazo |
+| `/decks/edit/:deckId` | `DeckEditorPage` | Editar mazo existente |
+| `/gacha` | `GachaPage` | Reclutar (sobres) |
+| `*` | `NotFound` | Página 404 |
+
+### Arquitectura de Routing
+
+- **AuthGuard** (layout route): protege todas las rutas excepto `/login`. Redirige a login si no hay sesión, a `/setup` si falta perfil.
+- **AuthContext**: provee `user`, `profile` y `signOut` a todas las páginas hijas sin recargar hooks.
+- **Páginas wrapper** (`*Page.tsx`): adaptadores entre rutas y componentes de UI existentes. Los componentes de UI no conocen las rutas.
+- **Navegación con state**: la composición del mazo se pasa a `/play` vía `location.state` para evitar URL params complejos.
 
 ---
 
@@ -121,11 +156,12 @@ supabase/
    - Cada carta solo puede actuar **una vez por turno** (`disponible` → `false`).
 3. **Saltar turno** — Pasa la acción al bot.
 
-### Sistema de Estrés
+### Sistema de Cordura 🧠
 
-- Las cartas QA atacan a cartas enemigas, sumando su `potencia` al `estresActual` del objetivo.
-- Cuando `estresActual >= estresLimite` → la carta es **destruida** (eliminada del tablero).
+- Las cartas tienen **cordura** (`corduraMax`): empieza al máximo y baja al recibir ataques de QA.
+- Cuando `cordura <= 0` → la carta es **destruida** (eliminada del tablero).
 - Los Programadores **no pueden atacar** cartas enemigas directamente (solo al Bug).
+- Visual: `🧠 3` → recibe 1 de daño → `🧠 2` → destruida al llegar a 0.
 
 ### IA del Bot
 
@@ -137,20 +173,28 @@ supabase/
 
 ## Cartas
 
+### Tipos de Carta
+
+| Tipo | Ataque básico | Objetivo del ataque |
+|---|---|---|
+| **Programador** | Reduce complejidad del Bug | Bug |
+| **QA** | Reduce cordura de una carta enemiga | Carta enemiga |
+| **Consumible** | No tiene ataque básico | Se usa desde la mano, no se coloca en mesa |
+
 ### Estadísticas
 
 | Campo | Descripción |
 |-------|-------------|
-| `potencia` | Daño base del ataque básico |
-| `coste` | Energía para colocar la carta en el tablero |
+| `potencia` | Daño base del ataque básico (no aplica a consumibles) |
+| `coste` | Energía para colocar la carta / usar el consumible |
 | `ataqueCoste` | Energía para ejecutar el ataque básico |
-| `estresLimite` | Estrés máximo que aguanta; al alcanzarlo, la carta se destruye |
+| `corduraMax` | Cordura inicial; al llegar a 0 la carta se destruye |
 | `habilidades` | Array de tuplas `[skillId, potencia, coste, duracion]` |
 
 ### Programadores (Ataque al Bug)
 
-| Carta | Emoji | Pot. | Coste | Atq.Coste | Estrés Lím. | Habilidades |
-|-------|-------|------|-------|-----------|-------------|-------------|
+| Carta | Emoji | Pot. | Coste | Atq.Coste | Cordura | Habilidades |
+|-------|-------|------|-------|-----------|---------|-------------|
 | Junior Dev | 👶 | 1 | 1 | 1 | 2 | — |
 | Mid Dev | 💻 | 2 | 2 | 1 | 3 | — |
 | Senior Dev | 🧠 | 3 | 3 | 1 | 4 | Par Programming (pot:2, coste:2, dur:1) |
@@ -161,10 +205,18 @@ supabase/
 
 ### QA (Ataque a cartas enemigas)
 
-| Carta | Emoji | Pot. | Coste | Atq.Coste | Estrés Lím. | Habilidades |
-|-------|-------|------|-------|-----------|-------------|-------------|
+| Carta | Emoji | Pot. | Coste | Atq.Coste | Cordura | Habilidades |
+|-------|-------|------|-------|-----------|---------|-------------|
 | QA Tester | 🔍 | 1 | 1 | 1 | 2 | QA Testing (pot:0, coste:1, dur:0) |
 | QA Lead | 🛡️ | 2 | 2 | 1 | 3 | QA Testing (pot:0, coste:2, dur:0) |
+
+### Consumibles (Se usan desde la mano)
+
+| Carta | Emoji | Coste | Efecto | Habilidad |
+|-------|-------|-------|--------|-----------|
+| Café de Máquina | ☕ | 1 | Restaura 3 de cordura a un aliado | Cafeína (pot:3, coste:1) |
+| PR Aprobado | ✅ | 2 | +2 potencia a un aliado por 1 turno | Motivación (pot:2, coste:2, dur:1) |
+| Hotfix de Emergencia | 🚑 | 2 | 2 de daño directo al Bug | Parche Rápido (pot:2, coste:2) |
 
 ---
 
@@ -177,11 +229,15 @@ Las habilidades están en un catálogo centralizado (`SKILLS`). Cada carta refer
 | 3 | Par Programming | Carta aliada | Buff de ataque: suma potencia al aliado | 1 turno |
 | 4 | QA Testing | Carta enemiga | Devuelve una carta enemiga a la mano rival | Inmediato |
 | 5 | Automatización | Bug | Daño directo al Bug | Inmediato |
+| 6 | Cafeína | Carta aliada | Restaura cordura a un aliado | Inmediato |
+| 7 | Motivación | Carta aliada | Buff de ataque al aliado | 1 turno |
+| 8 | Parche Rápido | Bug | Daño directo al Bug | Inmediato |
 
 ### Restricciones
 
 - Si no hay targets válidos (ej: no hay cartas enemigas para QA Testing), la habilidad no aparece.
 - Si no hay energía suficiente, la habilidad se muestra deshabilitada.
+- Los consumibles se usan **desde la mano** (drag-and-drop o click en el target) y se descartan tras su uso.
 
 ---
 
@@ -210,6 +266,7 @@ Los efectos temporales modifican las estadísticas de las cartas en juego:
 | **Ataque Frontal** | ⚔️ | Agresivo, muchos programadores de alto poder |
 | **Defensa Total** | 🛡️ | Control con cartas QA, elimina amenazas rivales |
 | **Equilibrio** | ⚖️ | Balanceado, ideal para nuevos jugadores |
+| **Prueba Consumibles** | 🧪 | Centrado en consumibles para probar la mecánica |
 
 ### Constructor de Mazos
 
@@ -341,6 +398,7 @@ npx playwright test
 | Complejidad del Bug | 10 |
 | Tamaño del mazo | 20 |
 | Robo inicial | 4 cartas |
+| Límite de mano | 6 cartas |
 | Slots en mesa | 4 |
 | Energía por turno | 3 |
 | Bonus por último golpe | +1⚡ |
