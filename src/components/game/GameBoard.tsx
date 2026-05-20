@@ -1,6 +1,7 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useGameLogic } from '@/hooks/useGameLogic';
+import { useGameStats } from '@/hooks/useGameStats';
 import { TABLE_MAX, SKILLS } from '@/constants';
 import BugCentral from './BugCentral';
 import GameCard from './GameCard';
@@ -12,6 +13,7 @@ import boardBg from '@/assets/game-board-bg.png';
 interface GameBoardProps {
   onExit: () => void;
   deckComposition?: { card_id: string; quantity: number }[];
+  playerId?: string;
   playerName?: string;
 }
 
@@ -25,8 +27,9 @@ type SelectionPhase =
 
 type ConsumableDropTarget = 'bug' | 'carta_aliada' | 'carta_enemiga';
 
-export default function GameBoard({ onExit, deckComposition, playerName = 'Jugador' }: GameBoardProps) {
+export default function GameBoard({ onExit, deckComposition, playerId, playerName = 'Jugador' }: GameBoardProps) {
   const game = useGameLogic(deckComposition);
+  const { recordResult } = useGameStats(playerId);
   const isPlayerTurn = game.turn === 'player';
   const [selection, setSelection] = useState<SelectionPhase>({ type: 'none' });
   const [showExitConfirm, setShowExitConfirm] = useState(false);
@@ -43,6 +46,7 @@ export default function GameBoard({ onExit, deckComposition, playerName = 'Jugad
   const draggingConsumableTargetRef = useRef<ConsumableDropTarget | null>(null);
   const dragOverTargetIdRef = useRef<string | 'bug' | null>(null);
   const prevBotTableIdsRef = useRef<string[]>([]);
+  const gameOverRecordedRef = useRef(false);
 
   // Action log — accumulates every game.message change
   const [logEntries, setLogEntries] = useState<{ id: number; text: string }[]>([]);
@@ -60,6 +64,25 @@ export default function GameBoard({ onExit, deckComposition, playerName = 'Jugad
       return next.length > 50 ? next.slice(next.length - 50) : next;
     });
   }, [game.message]);
+
+  useEffect(() => {
+    if (game.gamePhase !== 'game-over') {
+      gameOverRecordedRef.current = false;
+      return;
+    }
+    if (gameOverRecordedRef.current) return;
+
+    gameOverRecordedRef.current = true;
+    const result = game.playerScore > game.botScore
+      ? 'win'
+      : game.playerScore < game.botScore
+        ? 'loss'
+        : 'draw';
+
+    void recordResult(result).catch((err) => {
+      console.error('Failed to persist game result:', err);
+    });
+  }, [game.gamePhase, game.playerScore, game.botScore, recordResult]);
 
   const playCardAudio = useCallback((audioSrc?: string) => {
     if (!audioSrc) return;

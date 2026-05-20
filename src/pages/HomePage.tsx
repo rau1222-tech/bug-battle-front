@@ -1,3 +1,4 @@
+import { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
 import ProfileMenu from '@/components/auth/ProfileMenu';
 import { getActiveDeckId, useDecks } from '@/hooks/useDecks';
@@ -9,9 +10,19 @@ export default function HomePage() {
   const navigate = useNavigate();
   const { user, profile, signOut } = useAuthContext();
   const { decks } = useDecks(user.id);
+  const [activeId, setActiveId] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    void getActiveDeckId(user.id).then((id) => {
+      if (!cancelled) setActiveId(id);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [user.id]);
 
   const handleDebugLocal = () => {
-    const activeId = getActiveDeckId();
     const active = activeId ? decks.find((d) => d.id === activeId) : null;
     if (active) {
       navigate(ROUTES.PLAY, { state: { composition: active.cards } });

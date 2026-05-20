@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Plus, Pencil, Copy, Trash2, Play, Loader2, Check } from 'lucide-react';
 import BackButton from '@/components/ui/BackButton';
@@ -23,8 +23,22 @@ interface Props {
 export default function DeckSelectorScreen({ onBack, onPlay, onCreate, onEdit }: Props) {
   const { user, loading: authLoading } = useAuth();
   const { decks, loading, refresh } = useDecks(user?.id);
-  const [activeId, setActiveId] = useState<string | null>(getActiveDeckId());
+  const [activeId, setActiveId] = useState<string | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    if (!user?.id) {
+      setActiveId(null);
+      return;
+    }
+    void getActiveDeckId(user.id).then((id) => {
+      if (!cancelled) setActiveId(id);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [user?.id]);
 
   const handleDuplicate = async (deck: DeckSummary) => {
     if (!user) return;
@@ -46,7 +60,7 @@ export default function DeckSelectorScreen({ onBack, onPlay, onCreate, onEdit }:
     try {
       await deleteDeckRecord(deck.id);
       if (activeId === deck.id) {
-        setActiveDeckId(null);
+        await setActiveDeckId(user?.id, null);
         setActiveId(null);
       }
       toast.success('Mazo eliminado');
@@ -58,14 +72,14 @@ export default function DeckSelectorScreen({ onBack, onPlay, onCreate, onEdit }:
     }
   };
 
-  const handlePlay = (deck: DeckSummary) => {
-    setActiveDeckId(deck.id);
+  const handlePlay = async (deck: DeckSummary) => {
+    await setActiveDeckId(user?.id, deck.id);
     setActiveId(deck.id);
     onPlay(deck.id);
   };
 
-  const handleSetActive = (deck: DeckSummary) => {
-    setActiveDeckId(deck.id);
+  const handleSetActive = async (deck: DeckSummary) => {
+    await setActiveDeckId(user?.id, deck.id);
     setActiveId(deck.id);
     toast.success(`"${deck.name}" seleccionado`);
   };
@@ -107,8 +121,8 @@ export default function DeckSelectorScreen({ onBack, onPlay, onCreate, onEdit }:
                       deck={d}
                       isActive={activeId === d.id}
                       busy={busyId === d.id}
-                      onPlay={() => handlePlay(d)}
-                      onSetActive={() => handleSetActive(d)}
+                      onPlay={() => { void handlePlay(d); }}
+                      onSetActive={() => { void handleSetActive(d); }}
                       onDuplicate={() => handleDuplicate(d)}
                     />
                   ))}
@@ -135,8 +149,8 @@ export default function DeckSelectorScreen({ onBack, onPlay, onCreate, onEdit }:
                       deck={d}
                       isActive={activeId === d.id}
                       busy={busyId === d.id}
-                      onPlay={() => handlePlay(d)}
-                      onSetActive={() => handleSetActive(d)}
+                      onPlay={() => { void handlePlay(d); }}
+                      onSetActive={() => { void handleSetActive(d); }}
                       onEdit={() => onEdit(d)}
                       onDuplicate={() => handleDuplicate(d)}
                       onDelete={() => handleDelete(d)}

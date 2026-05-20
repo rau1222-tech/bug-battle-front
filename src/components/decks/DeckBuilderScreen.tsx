@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { Save, Loader2, Plus, Minus } from 'lucide-react';
 import BackButton from '@/components/ui/BackButton';
-import { CARD_DEFINITIONS, DECK_SIZE, type CardType } from '@/constants';
+import { DECK_SIZE, type CardType } from '@/constants';
 import {
   createDeckRecord,
   updateDeckRecord,
@@ -9,6 +9,7 @@ import {
   type DeckSummary,
 } from '@/hooks/useDecks';
 import { useCollection, getRarity, RARITY_LABELS, RARITY_COLORS } from '@/hooks/useCollection';
+import { useCards } from '@/hooks/useCards';
 import DeckCardThumb from './DeckCardThumb';
 import { toast } from 'sonner';
 
@@ -22,7 +23,8 @@ interface Props {
 const EMOJI_OPTIONS = ['🃏', '⚔️', '🛡️', '⚖️', '🚀', '🐛', '💻', '🔥', '⭐', '🎯', '🧠', '⚡'];
 
 export default function DeckBuilderScreen({ userId, editing, onBack, onSaved }: Props) {
-  const { collection } = useCollection();
+  const { cards } = useCards();
+  const { collection } = useCollection(userId);
   const [name, setName] = useState(editing?.name ?? 'Mi nuevo mazo');
   const [emoji, setEmoji] = useState(editing?.cover_emoji ?? '🃏');
   const [filter, setFilter] = useState<'all' | CardType>('all');
@@ -42,19 +44,19 @@ export default function DeckBuilderScreen({ userId, editing, onBack, onSaved }: 
   const stats = useMemo(() => {
     let progs = 0;
     let qas = 0;
-    for (const def of CARD_DEFINITIONS) {
+    for (const def of cards) {
       const q = counts[def.id] ?? 0;
       if (def.tipo === 'programador') progs += q;
       else if (def.tipo === 'qa') qas += q;
     }
     return { progs, qas };
-  }, [counts]);
+  }, [cards, counts]);
 
   const filteredCatalog = useMemo(() => {
-    return CARD_DEFINITIONS.filter((c) => filter === 'all' || c.tipo === filter);
-  }, [filter]);
+    return cards.filter((c) => filter === 'all' || c.tipo === filter);
+  }, [cards, filter]);
 
-  const inDeck = CARD_DEFINITIONS.filter((c) => (counts[c.id] ?? 0) > 0);
+  const inDeck = cards.filter((c) => (counts[c.id] ?? 0) > 0);
 
   const inc = (id: string) => {
     setCounts((c) => {

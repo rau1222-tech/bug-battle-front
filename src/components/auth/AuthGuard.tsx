@@ -37,6 +37,10 @@ export default function AuthGuard() {
     id: user.id,
     display_name: 'Jugador',
     avatar_url: null,
+    gold: 300,
+    wins: 0,
+    losses: 0,
+    active_deck_id: null,
   };
 
   return (

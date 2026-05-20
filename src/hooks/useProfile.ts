@@ -6,6 +6,10 @@ export interface Profile {
   id: string;
   display_name: string;
   avatar_url: string | null;
+  gold: number;
+  wins: number;
+  losses: number;
+  active_deck_id: string | null;
 }
 
 const CACHE_KEY = 'bb_profile_';
@@ -42,8 +46,8 @@ export function useProfile(user: User | null) {
       // Try fetching up to 2 times (covers the redirect-back timing issue)
       for (let attempt = 0; attempt < 2; attempt++) {
         const { data, error } = await supabase
-          .from('profiles')
-          .select('id, display_name, avatar_url')
+          .from('players')
+          .select('id, display_name, avatar_url, gold, wins, losses, active_deck_id')
           .eq('id', user.id)
           .single();
 
@@ -89,18 +93,33 @@ export function useProfile(user: User | null) {
     const avatarUrl = meta.avatar_url ?? meta.picture ?? null;
 
     const { data: created, error } = await supabase
-      .from('profiles')
-      .upsert({ id: user.id, display_name: displayName, avatar_url: avatarUrl })
-      .select('id, display_name, avatar_url')
+      .from('players')
+      .upsert({
+        id: user.id,
+        display_name: displayName,
+        avatar_url: avatarUrl,
+        gold: 300,
+        wins: 0,
+        losses: 0,
+      })
+      .select('id, display_name, avatar_url, gold, wins, losses, active_deck_id')
       .single();
 
-    const final: Profile = created ?? { id: user.id, display_name: displayName, avatar_url: avatarUrl };
+    const final: Profile = created ?? {
+      id: user.id,
+      display_name: displayName,
+      avatar_url: avatarUrl,
+      gold: 300,
+      wins: 0,
+      losses: 0,
+      active_deck_id: null,
+    };
 
     if (error) {
       console.error('Profile upsert failed:', error);
       const { data: retry } = await supabase
-        .from('profiles')
-        .select('id, display_name, avatar_url')
+        .from('players')
+        .select('id, display_name, avatar_url, gold, wins, losses, active_deck_id')
         .eq('id', user.id)
         .single();
       if (retry) {
@@ -120,7 +139,7 @@ export function useProfile(user: User | null) {
   const updateName = useCallback(async (newName: string) => {
     if (!user) return;
     const { error } = await supabase
-      .from('profiles')
+      .from('players')
       .update({ display_name: newName })
       .eq('id', user.id);
     if (!error) setProfile((p) => p ? { ...p, display_name: newName } : p);

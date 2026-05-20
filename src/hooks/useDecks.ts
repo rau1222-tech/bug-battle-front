@@ -19,14 +19,24 @@ export interface DeckSummary {
   qas: number;
 }
 
-const ACTIVE_DECK_KEY = 'bug-hunters-active-deck';
-
-export function getActiveDeckId(): string | null {
-  return localStorage.getItem(ACTIVE_DECK_KEY);
+export async function getActiveDeckId(userId: string | null | undefined): Promise<string | null> {
+  if (!userId) return null;
+  const { data, error } = await supabase
+    .from('players')
+    .select('active_deck_id')
+    .eq('id', userId)
+    .single();
+  if (error) return null;
+  return data.active_deck_id;
 }
-export function setActiveDeckId(id: string | null) {
-  if (id) localStorage.setItem(ACTIVE_DECK_KEY, id);
-  else localStorage.removeItem(ACTIVE_DECK_KEY);
+
+export async function setActiveDeckId(userId: string | null | undefined, id: string | null) {
+  if (!userId) return;
+  const { error } = await supabase
+    .from('players')
+    .update({ active_deck_id: id })
+    .eq('id', userId);
+  if (error) throw new Error(error.message);
 }
 
 function summarize(

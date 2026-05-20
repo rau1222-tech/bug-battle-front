@@ -24,6 +24,7 @@ export default function PlayPage() {
   return (
     <GameBoard
       deckComposition={composition}
+      playerId={profile.id}
       playerName={profile.display_name}
       onExit={() => navigate(ROUTES.HOME)}
     />

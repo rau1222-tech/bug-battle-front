@@ -1,7 +1,9 @@
 import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import BackButton from '@/components/ui/BackButton';
-import { CARD_DEFINITIONS, DEFAULT_CARD_IMAGE, resolveCardImage, type CardTemplate } from '@/constants';
+import { DEFAULT_CARD_IMAGE, resolveCardImage, type CardTemplate } from '@/constants';
+import { useAuthContext } from '@/contexts/AuthContext';
+import { useCards } from '@/hooks/useCards';
 import {
   useCollection,
   openPack,
@@ -20,14 +22,16 @@ interface Props {
 type Phase = 'shop' | 'opening' | 'reveal';
 
 export default function GachaScreen({ onBack }: Props) {
-  const { collection, coins, addCards, spendCoins } = useCollection();
+  const { user } = useAuthContext();
+  const { cards, gachaWeightById } = useCards();
+  const { collection, coins, loading, addCards, spendCoins } = useCollection(user.id);
   const [phase, setPhase] = useState<Phase>('shop');
   const [pulled, setPulled] = useState<CardTemplate[]>([]);
   const [revealedIdx, setRevealedIdx] = useState(-1);
 
-  const handleBuyPack = () => {
-    if (!spendCoins(PACK_COST)) return;
-    const results = openPack();
+  const handleBuyPack = async () => {
+    if (!(await spendCoins(PACK_COST))) return;
+    const results = openPack(cards, (card) => gachaWeightById[card.id] ?? 1);
     setPulled(results);
     setRevealedIdx(-1);
     setPhase('opening');
@@ -37,11 +41,11 @@ export default function GachaScreen({ onBack }: Props) {
     }, 1200);
   };
 
-  const handleRevealNext = () => {
+  const handleRevealNext = async () => {
     if (revealedIdx < pulled.length - 1) {
       setRevealedIdx((i) => i + 1);
     } else {
-      addCards(pulled);
+      await addCards(pulled);
       setPhase('shop');
       setPulled([]);
       setRevealedIdx(-1);
@@ -105,8 +109,8 @@ export default function GachaScreen({ onBack }: Props) {
 
                   {/* Pack visual */}
                   <motion.button
-                    onClick={handleBuyPack}
-                    disabled={coins < PACK_COST}
+                    onClick={() => { void handleBuyPack(); }}
+                    disabled={loading || coins < PACK_COST}
                     whileHover={{ scale: coins >= PACK_COST ? 1.05 : 1 }}
                     whileTap={{ scale: coins >= PACK_COST ? 0.95 : 1 }}
                     className="relative flex flex-col items-center gap-3 p-6 sm:p-8 rounded-lg bg-gradient-to-b from-purple-600/20 to-purple-900/20 border-2 border-purple-500/30 backdrop-blur-sm shadow-[0_0_30px_-10px_hsl(260,80%,60%,0.25)] transition-all hover:border-purple-400/50 hover:shadow-[0_0_40px_-10px_hsl(260,80%,60%,0.4)] disabled:opacity-40 disabled:cursor-not-allowed group"
@@ -148,7 +152,7 @@ export default function GachaScreen({ onBack }: Props) {
                   </span>
                 </div>
                 <div className="p-3 grid grid-cols-3 gap-2">
-                  {CARD_DEFINITIONS.map((def) => {
+                  {cards.map((def) => {
                     const qty = collection[def.id] ?? 0;
                     const rarity = getRarity(def);
                     return (
@@ -293,7 +297,7 @@ export default function GachaScreen({ onBack }: Props) {
                   </div>
 
                   <motion.button
-                    onClick={handleRevealNext}
+                    onClick={() => { void handleRevealNext(); }}
                     whileHover={{ scale: 1.05 }}
                     whileTap={{ scale: 0.95 }}
                     className="mt-2 px-8 py-3 font-display text-sm tracking-wide rounded-md bg-gradient-to-r from-purple-600/80 to-indigo-600/80 text-white hover:from-purple-500/90 hover:to-indigo-500/90 border border-purple-400/30 shadow-[0_0_20px_-5px_hsl(260,80%,60%,0.3)] transition-all hover:shadow-[0_0_25px_-5px_hsl(260,80%,60%,0.5)]"
