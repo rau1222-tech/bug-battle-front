@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import type { User } from '@supabase/supabase-js';
 
@@ -30,6 +30,16 @@ export function useProfile(user: User | null) {
   const [profile, setProfile] = useState<Profile | null>(null);
   const [loading, setLoading] = useState(true);
   const [needsSetup, setNeedsSetup] = useState(false);
+  const prevUid = useRef<string | undefined>(undefined);
+
+  // Synchronously reset loading when user changes to avoid stale-state redirects
+  if (user?.id !== prevUid.current) {
+    prevUid.current = user?.id;
+    if (user) {
+      if (!loading) setLoading(true);
+      if (needsSetup) setNeedsSetup(false);
+    }
+  }
 
   useEffect(() => {
     let cancelled = false;
@@ -71,16 +81,10 @@ export function useProfile(user: User | null) {
         break;
       }
 
-      // No profile found in DB — check local cache before prompting
+      // No profile found in DB — needs setup (ignore stale cache)
       if (!cancelled) {
-        const cached = getCachedProfile(user.id);
-        if (cached) {
-          setProfile(cached);
-          setNeedsSetup(false);
-        } else {
-          setProfile(null);
-          setNeedsSetup(true);
-        }
+        setProfile(null);
+        setNeedsSetup(true);
         setLoading(false);
       }
     })();
@@ -107,19 +111,9 @@ export function useProfile(user: User | null) {
       .select('id, display_name, avatar_url, gold, wins, losses, active_deck_id, admin')
       .single();
 
-    const final: Profile = created ?? {
-      id: user.id,
-      display_name: displayName,
-      avatar_url: avatarUrl,
-      gold: 300,
-      wins: 0,
-      losses: 0,
-      active_deck_id: null,
-      admin: false,
-    };
-
     if (error) {
       console.error('Profile upsert failed:', error);
+      // Retry: maybe a trigger already created the row
       const { data: retry } = await supabase
         .from('players')
         .select('id, display_name, avatar_url, gold, wins, losses, active_deck_id, admin')
@@ -128,15 +122,18 @@ export function useProfile(user: User | null) {
       if (retry) {
         setProfile(retry);
         cacheProfile(retry);
+        setNeedsSetup(false);
       } else {
-        setProfile(final);
-        cacheProfile(final);
+        // DB write truly failed — do NOT cache a fake profile
+        console.error('Profile creation failed — no player row exists');
+        setNeedsSetup(true);
+        return;
       }
     } else {
-      setProfile(final);
-      cacheProfile(final);
+      setProfile(created);
+      cacheProfile(created);
+      setNeedsSetup(false);
     }
-    setNeedsSetup(false);
   }, [user?.id]);
 
   const updateName = useCallback(async (newName: string) => {
