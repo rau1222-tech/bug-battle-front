@@ -10,6 +10,7 @@ export interface Profile {
   wins: number;
   losses: number;
   active_deck_id: string | null;
+  admin: boolean;
 }
 
 const CACHE_KEY = 'bb_profile_';
@@ -47,7 +48,7 @@ export function useProfile(user: User | null) {
       for (let attempt = 0; attempt < 2; attempt++) {
         const { data, error } = await supabase
           .from('players')
-          .select('id, display_name, avatar_url, gold, wins, losses, active_deck_id')
+          .select('id, display_name, avatar_url, gold, wins, losses, active_deck_id, admin')
           .eq('id', user.id)
           .single();
 
@@ -101,8 +102,9 @@ export function useProfile(user: User | null) {
         gold: 300,
         wins: 0,
         losses: 0,
+        admin: false,
       })
-      .select('id, display_name, avatar_url, gold, wins, losses, active_deck_id')
+      .select('id, display_name, avatar_url, gold, wins, losses, active_deck_id, admin')
       .single();
 
     const final: Profile = created ?? {
@@ -113,13 +115,14 @@ export function useProfile(user: User | null) {
       wins: 0,
       losses: 0,
       active_deck_id: null,
+      admin: false,
     };
 
     if (error) {
       console.error('Profile upsert failed:', error);
       const { data: retry } = await supabase
         .from('players')
-        .select('id, display_name, avatar_url, gold, wins, losses, active_deck_id')
+        .select('id, display_name, avatar_url, gold, wins, losses, active_deck_id, admin')
         .eq('id', user.id)
         .single();
       if (retry) {

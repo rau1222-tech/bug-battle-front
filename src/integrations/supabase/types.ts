@@ -197,6 +197,7 @@ export type Database = {
       players: {
         Row: {
           active_deck_id: string | null
+          admin: boolean
           avatar_url: string | null
           created_at: string
           display_name: string
@@ -208,6 +209,7 @@ export type Database = {
         }
         Insert: {
           active_deck_id?: string | null
+          admin?: boolean
           avatar_url?: string | null
           created_at?: string
           display_name: string
@@ -219,6 +221,7 @@ export type Database = {
         }
         Update: {
           active_deck_id?: string | null
+          admin?: boolean
           avatar_url?: string | null
           created_at?: string
           display_name?: string

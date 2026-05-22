@@ -41,6 +41,7 @@ export default function AuthGuard() {
     wins: 0,
     losses: 0,
     active_deck_id: null,
+    admin: false,
   };
 
   return (

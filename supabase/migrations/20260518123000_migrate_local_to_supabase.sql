@@ -60,6 +60,7 @@ CREATE TABLE players (
   gold           integer NOT NULL DEFAULT 300,
   wins           integer NOT NULL DEFAULT 0,
   losses         integer NOT NULL DEFAULT 0,
+  admin          boolean NOT NULL DEFAULT false,
   active_deck_id uuid,
   created_at     timestamptz NOT NULL DEFAULT now(),
   updated_at     timestamptz NOT NULL DEFAULT now()
