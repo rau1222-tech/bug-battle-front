@@ -87,14 +87,15 @@ export default function HomePage() {
               <span>JUGAR VS IA</span>
             </motion.button>
 
-            {/* Disabled PvP */}
-            <button
-              disabled
-              className="w-full h-12 font-display text-xs tracking-wider rounded-md bg-[hsl(220,15%,12%)] text-cyan-200/20 border border-cyan-900/20 cursor-not-allowed flex items-center justify-center gap-2"
+            <motion.button
+              whileHover={{ scale: 1.02 }}
+              whileTap={{ scale: 0.98 }}
+              onClick={() => navigate(ROUTES.ONLINE)}
+              className="w-full h-12 font-display text-xs tracking-wider rounded-md bg-gradient-to-r from-emerald-700/60 to-teal-700/60 text-emerald-50 hover:from-emerald-600/70 hover:to-teal-600/70 border border-emerald-400/30 transition-all flex items-center justify-center gap-2"
             >
               <span className="text-sm">🌐</span>
-              <span>ONLINE PvP — PRÓXIMAMENTE</span>
-            </button>
+              <span>ONLINE PvP</span>
+            </motion.button>
 
             {/* Divider */}
             <div className="flex items-center gap-3 my-1">
