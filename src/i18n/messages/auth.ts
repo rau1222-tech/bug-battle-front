@@ -53,6 +53,9 @@ export const auth: NamespaceMessages = {
     save: 'GUARDAR',
     myData: 'Mis datos',
     signOut: 'Cerrar sesión',
+    'feature.collect': 'Recluta programadores y QAs abriendo sobres',
+    'feature.decks': 'Construye tu mazo de 20 cartas',
+    'feature.battle': 'Caza bugs contra la IA o en PvP online',
   },
   en: {
     'errors.invalidCredentials': 'Incorrect email or password',
@@ -105,6 +108,9 @@ export const auth: NamespaceMessages = {
     save: 'SAVE',
     myData: 'My details',
     signOut: 'Sign out',
+    'feature.collect': 'Recruit developers and QAs by opening packs',
+    'feature.decks': 'Build your 20-card deck',
+    'feature.battle': 'Hunt bugs against the AI or in online PvP',
   },
   fr: {
     'errors.invalidCredentials': 'E-mail ou mot de passe incorrect',
@@ -157,5 +163,8 @@ export const auth: NamespaceMessages = {
     save: 'ENREGISTRER',
     myData: 'Mes informations',
     signOut: 'Se déconnecter',
+    'feature.collect': 'Recrutez des développeurs et des QA en ouvrant des boosters',
+    'feature.decks': 'Construisez votre deck de 20 cartes',
+    'feature.battle': 'Chassez les bugs contre l’IA ou en PvP en ligne',
   },
 };

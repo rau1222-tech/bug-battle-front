@@ -104,7 +104,7 @@ export default function DeckSelectorScreen({ onBack, onPlay, onCreate, onEdit }:
       <div className="fixed top-1/4 right-1/4 w-80 h-80 bg-emerald-500/5 rounded-full blur-[120px] pointer-events-none" />
       <div className="fixed bottom-1/3 left-1/3 w-60 h-60 bg-teal-500/5 rounded-full blur-[100px] pointer-events-none" />
 
-      <div className="relative z-10 max-w-5xl mx-auto px-4 py-6 sm:px-6 sm:py-10">
+      <div className="relative z-10 max-w-7xl mx-auto px-4 py-6 sm:px-8 sm:py-10">
         {/* Header */}
         <div className="flex items-center justify-between mb-6">
           <BackButton onClick={onBack} color="emerald" />
@@ -124,7 +124,7 @@ export default function DeckSelectorScreen({ onBack, onPlay, onCreate, onEdit }:
           <>
             {/* Presets */}
             <Section title={t('decks.selector.presets')} subtitle={t('decks.selector.presetsSubtitle')}>
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
                 <AnimatePresence>
                   {presets.map((d) => (
                     <DeckCard
@@ -143,7 +143,7 @@ export default function DeckSelectorScreen({ onBack, onPlay, onCreate, onEdit }:
 
             {/* User decks */}
             <Section title={t('decks.selector.mine')} subtitle={t(mine.length === 1 ? 'decks.selector.createdOne' : 'decks.selector.createdMany', { count: mine.length })}>
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
                 <button
                   onClick={onCreate}
                   className="group min-h-[120px] rounded-lg border-2 border-dashed border-emerald-600/30 bg-[hsl(220,20%,8%)]/60 hover:bg-[hsl(220,20%,10%)]/70 hover:border-emerald-400/50 transition-all flex flex-col items-center justify-center gap-2"

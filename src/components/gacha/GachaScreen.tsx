@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { toast } from 'sonner';
 import BackButton from '@/components/ui/BackButton';
+import TerminalPanel from '@/components/layout/TerminalPanel';
 import { useI18n } from '@/i18n';
 import BannerEditorModal from '@/components/gacha/BannerEditorModal';
 import { DEFAULT_CARD_IMAGE, resolveCardImage, type CardTemplate } from '@/constants';
@@ -138,7 +139,7 @@ export default function GachaScreen({ onBack }: Props) {
       <div className="fixed top-1/3 left-1/4 w-80 h-80 bg-purple-500/8 rounded-full blur-[120px] pointer-events-none" />
       <div className="fixed bottom-1/4 right-1/3 w-60 h-60 bg-indigo-500/6 rounded-full blur-[100px] pointer-events-none" />
 
-      <div className="relative z-10 max-w-5xl mx-auto px-4 py-6 sm:px-6 sm:py-10">
+      <div className="relative z-10 max-w-6xl mx-auto px-4 py-6 sm:px-6 sm:py-10">
         {/* Header */}
         <div className="flex items-center justify-between mb-6">
           <BackButton onClick={onBack} color="purple" />
@@ -161,180 +162,168 @@ export default function GachaScreen({ onBack }: Props) {
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -20 }}
-              className="flex flex-col items-center gap-6 w-full max-w-md"
+              className="flex flex-col gap-4 w-full"
             >
-              {/* Terminal-style panel */}
-              <div className="w-full rounded-lg border border-purple-500/20 bg-[hsl(220,20%,8%)]/90 backdrop-blur-md shadow-[0_0_40px_-10px_hsl(260,80%,60%,0.15)] overflow-hidden">
-                {/* Title bar */}
-                <div className="flex items-center gap-2 px-4 py-2 border-b border-purple-500/10 bg-[hsl(220,18%,10%)]">
-                  <div className="flex gap-1.5">
-                    <div className="w-2.5 h-2.5 rounded-full bg-red-500/70" />
-                    <div className="w-2.5 h-2.5 rounded-full bg-yellow-500/70" />
-                    <div className="w-2.5 h-2.5 rounded-full bg-green-500/70" />
-                  </div>
-                  <span className="ml-2 text-[10px] font-body text-purple-400/50 tracking-wider uppercase">
-                    {t('gacha.terminalPath')}
-                  </span>
-                </div>
-
-                <div className="p-4 sm:p-6 flex flex-col items-center gap-5">
-                  <h1 className="text-2xl sm:text-3xl font-display text-purple-100 tracking-wider text-glow-purple">
-                    {t('gacha.title')}
-                  </h1>
-                  <p className="text-sm font-body text-purple-200/50 text-center">
-                    {t('gacha.intro')}
-                  </p>
-
-                  {isAdmin && (
+              <div className="grid lg:grid-cols-[minmax(0,5fr)_minmax(0,7fr)] gap-4 items-start w-full">
+                {/* Banner list */}
+                <TerminalPanel
+                  accent="purple"
+                  path={t('gacha.terminalPath')}
+                  footer={t('gacha.footerHint')}
+                  bodyClassName="sm:p-5 flex flex-col gap-4"
+                  actions={isAdmin && (
                     <button
                       type="button"
                       onClick={() => setEditor({ open: true, banner: null })}
-                      className="px-3 py-1.5 rounded-md bg-purple-600/30 border border-purple-500/30 text-purple-100 font-display text-[10px] tracking-[0.15em] hover:bg-purple-600/50 transition-colors"
+                      className="px-2 py-0.5 rounded bg-purple-600/30 border border-purple-500/30 text-purple-100 font-display text-[9px] tracking-[0.15em] hover:bg-purple-600/50 transition-colors"
                     >
                       {t('gacha.newBanner')}
                     </button>
                   )}
+                >
+                  <p className="text-sm font-body text-purple-200/50">
+                    {t('gacha.intro')}
+                  </p>
 
                   {bannersLoading ? (
                     <p className="text-xs font-body text-purple-300/50 animate-pulse">{t('gacha.loadingBanners')}</p>
                   ) : bannersError ? (
-                    <p className="text-xs font-body text-red-400/80 text-center">{t('gacha.loadError', { error: bannersError })}</p>
+                    <p className="text-xs font-body text-red-400/80">{t('gacha.loadError', { error: bannersError })}</p>
                   ) : visibleBanners.length === 0 ? (
-                    <p className="text-xs font-body text-purple-300/50 text-center">
+                    <p className="text-xs font-body text-purple-300/50">
                       {t('gacha.noBanners')}
                     </p>
                   ) : (
-                    <>
-                      {/* Banner selector */}
-                      <div className="w-full flex flex-col gap-2">
-                        {visibleBanners.map((b) => {
-                          const status = getBannerStatus(b, now);
-                          const selected = selectedBanner?.id === b.id;
-                          return (
-                            <button
-                              key={b.id}
-                              type="button"
-                              onClick={() => setSelectedBannerId(b.id)}
-                              className={`w-full text-left px-3 py-2 rounded-md border transition-all ${selected ? 'border-purple-400/60 bg-purple-600/20' : 'border-purple-500/15 bg-[hsl(220,15%,12%)] hover:border-purple-400/30'}`}
-                            >
-                              <div className="flex items-center justify-between gap-2">
-                                <span className="font-display text-xs text-purple-100 truncate">{b.titulo}</span>
-                                <span className={`shrink-0 text-[9px] font-display px-1.5 py-0.5 rounded border ${STATUS_CLASSES[status]}`}>
-                                  {t(BANNER_STATUS_LABELS[status])}
-                                </span>
-                              </div>
-                              <p className="text-[10px] font-body text-purple-300/50 mt-0.5">
-                                {formatBannerDate(b.fechaInicio)} → {formatBannerDate(b.fechaFin)}
-                              </p>
-                            </button>
-                          );
-                        })}
+                    <div className="w-full flex flex-col gap-2 lg:max-h-[50vh] lg:overflow-y-auto lg:pr-1">
+                      {visibleBanners.map((b) => {
+                        const status = getBannerStatus(b, now);
+                        const selected = selectedBanner?.id === b.id;
+                        return (
+                          <button
+                            key={b.id}
+                            type="button"
+                            onClick={() => setSelectedBannerId(b.id)}
+                            className={`w-full text-left px-3 py-2.5 rounded-md border transition-all ${selected ? 'border-purple-400/60 bg-purple-600/20 shadow-[0_0_15px_-5px_hsl(260,80%,60%,0.4)]' : 'border-purple-500/15 bg-[hsl(220,15%,12%)] hover:border-purple-400/30'}`}
+                          >
+                            <div className="flex items-center justify-between gap-2">
+                              <span className="font-display text-xs text-purple-100 truncate">{b.titulo}</span>
+                              <span className={`shrink-0 text-[9px] font-display px-1.5 py-0.5 rounded border ${STATUS_CLASSES[status]}`}>
+                                {t(BANNER_STATUS_LABELS[status])}
+                              </span>
+                            </div>
+                            <p className="text-[10px] font-body text-purple-300/50 mt-0.5">
+                              {formatBannerDate(b.fechaInicio)} → {formatBannerDate(b.fechaFin)}
+                            </p>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  )}
+                </TerminalPanel>
+
+                {/* Selected banner: pack + card pool */}
+                <TerminalPanel accent="purple" path={selectedBanner ? selectedBanner.titulo : '—'} bodyClassName="sm:p-5">
+                  {selectedBanner ? (
+                    <div className="grid sm:grid-cols-[minmax(0,2fr)_minmax(0,3fr)] gap-5 items-start">
+                      <div className="flex flex-col items-center gap-3">
+                        <motion.button
+                          onClick={() => { void handleBuyPack(); }}
+                          disabled={!canBuy}
+                          whileHover={{ scale: canBuy ? 1.05 : 1 }}
+                          whileTap={{ scale: canBuy ? 0.95 : 1 }}
+                          className="relative w-full flex flex-col items-center gap-3 p-6 sm:p-8 rounded-lg bg-gradient-to-b from-purple-600/20 to-purple-900/20 border-2 border-purple-500/30 backdrop-blur-sm shadow-[0_0_30px_-10px_hsl(260,80%,60%,0.25)] transition-all hover:border-purple-400/50 hover:shadow-[0_0_40px_-10px_hsl(260,80%,60%,0.4)] disabled:opacity-40 disabled:cursor-not-allowed group"
+                        >
+                          <motion.span
+                            animate={{ rotate: [0, -3, 3, -3, 0] }}
+                            transition={{ duration: 2, repeat: Infinity, ease: 'easeInOut' }}
+                            className="text-6xl sm:text-7xl"
+                          >
+                            🎁
+                          </motion.span>
+                          <span className="font-display text-base text-purple-100 tracking-wide text-center">
+                            {selectedBanner.titulo}
+                          </span>
+                          <span className="flex items-center gap-1.5 font-display text-sm text-purple-300/80 text-center">
+                            {t('gacha.packInfo', { cost: selectedBanner.coste, count: selectedBanner.cartasPorSobre })}
+                          </span>
+                          {selectedStatus === 'programado' && (
+                            <span className="text-xs font-body text-amber-300/80 mt-1">{t('gacha.notStarted')}</span>
+                          )}
+                          {selectedStatus === 'finalizado' && (
+                            <span className="text-xs font-body text-stone-400 mt-1">{t('gacha.ended')}</span>
+                          )}
+                          {selectedStatus === 'activo' && selectedBanner.cards.length === 0 && (
+                            <span className="text-xs font-body text-red-400/80 mt-1">{t('gacha.noCards')}</span>
+                          )}
+                          {selectedStatus === 'activo' && !loading && !canAfford && (
+                            <span className="text-xs font-body text-red-400/80 mt-1">{t('gacha.notEnoughCoins')}</span>
+                          )}
+                        </motion.button>
+
+                        {isAdmin && (
+                          <button
+                            type="button"
+                            onClick={() => setEditor({ open: true, banner: selectedBanner })}
+                            className="px-3 py-1.5 rounded-md border border-purple-500/30 text-purple-200 font-display text-[10px] tracking-[0.15em] hover:bg-purple-600/20 transition-colors"
+                          >
+                            {t('gacha.editBanner')}
+                          </button>
+                        )}
                       </div>
 
-                      {selectedBanner && (
-                        <>
-                          {/* Pack visual */}
-                          <motion.button
-                            onClick={() => { void handleBuyPack(); }}
-                            disabled={!canBuy}
-                            whileHover={{ scale: canBuy ? 1.05 : 1 }}
-                            whileTap={{ scale: canBuy ? 0.95 : 1 }}
-                            className="relative flex flex-col items-center gap-3 p-6 sm:p-8 rounded-lg bg-gradient-to-b from-purple-600/20 to-purple-900/20 border-2 border-purple-500/30 backdrop-blur-sm shadow-[0_0_30px_-10px_hsl(260,80%,60%,0.25)] transition-all hover:border-purple-400/50 hover:shadow-[0_0_40px_-10px_hsl(260,80%,60%,0.4)] disabled:opacity-40 disabled:cursor-not-allowed group"
-                          >
-                            <motion.span
-                              animate={{ rotate: [0, -3, 3, -3, 0] }}
-                              transition={{ duration: 2, repeat: Infinity, ease: 'easeInOut' }}
-                              className="text-6xl sm:text-7xl"
-                            >
-                              🎁
-                            </motion.span>
-                            <span className="font-display text-base text-purple-100 tracking-wide text-center">
-                              {selectedBanner.titulo}
-                            </span>
-                            <span className="flex items-center gap-1.5 font-display text-sm text-purple-300/80">
-                              {t('gacha.packInfo', { cost: selectedBanner.coste, count: selectedBanner.cartasPorSobre })}
-                            </span>
-                            {selectedStatus === 'programado' && (
-                              <span className="text-xs font-body text-amber-300/80 mt-1">{t('gacha.notStarted')}</span>
-                            )}
-                            {selectedStatus === 'finalizado' && (
-                              <span className="text-xs font-body text-stone-400 mt-1">{t('gacha.ended')}</span>
-                            )}
-                            {selectedStatus === 'activo' && selectedBanner.cards.length === 0 && (
-                              <span className="text-xs font-body text-red-400/80 mt-1">{t('gacha.noCards')}</span>
-                            )}
-                            {selectedStatus === 'activo' && !loading && !canAfford && (
-                              <span className="text-xs font-body text-red-400/80 mt-1">{t('gacha.notEnoughCoins')}</span>
-                            )}
-                          </motion.button>
-
-                          {isAdmin && (
-                            <button
-                              type="button"
-                              onClick={() => setEditor({ open: true, banner: selectedBanner })}
-                              className="px-3 py-1.5 rounded-md border border-purple-500/30 text-purple-200 font-display text-[10px] tracking-[0.15em] hover:bg-purple-600/20 transition-colors"
-                            >
-                              {t('gacha.editBanner')}
-                            </button>
-                          )}
-
-                          {/* Banner card pool: probability from the banner weight, rarity from the card's own weight */}
-                          <div className="w-full">
-                            <p className="text-[10px] font-display uppercase tracking-widest text-purple-300/50 mb-2">
-                              {t('gacha.bannerCards')}
-                            </p>
-                            <div className="flex flex-col gap-1">
-                              {[...selectedBanner.cards]
-                                .sort((a, b) => b.pesoAparicion - a.pesoAparicion)
-                                .map((bc) => {
-                                  const def = cardsById.get(bc.cardId);
-                                  const rarity = def ? getRarity(def) : 'comun';
-                                  const maxed = (collection[bc.cardId] ?? 0) >= MAX_COPIES_PER_CARD;
-                                  return (
-                                    <div
-                                      key={bc.cardId}
-                                      className={`flex items-center gap-2 px-2.5 py-1.5 rounded-md bg-[hsl(220,15%,12%)] border ${RARITY_COLORS[rarity]}`}
+                      {/* Banner card pool: probability from the banner weight, rarity from the card's own weight */}
+                      <div className="w-full">
+                        <p className="text-[10px] font-display uppercase tracking-widest text-purple-300/50 mb-2">
+                          {t('gacha.bannerCards')}
+                        </p>
+                        <div className="flex flex-col gap-1 sm:max-h-[50vh] sm:overflow-y-auto sm:pr-1">
+                          {[...selectedBanner.cards]
+                            .sort((a, b) => b.pesoAparicion - a.pesoAparicion)
+                            .map((bc) => {
+                              const def = cardsById.get(bc.cardId);
+                              const rarity = def ? getRarity(def) : 'comun';
+                              const maxed = (collection[bc.cardId] ?? 0) >= MAX_COPIES_PER_CARD;
+                              return (
+                                <div
+                                  key={bc.cardId}
+                                  className={`flex items-center gap-2 px-2.5 py-1.5 rounded-md bg-[hsl(220,15%,12%)] border ${RARITY_COLORS[rarity]}`}
+                                >
+                                  <span className="flex-1 min-w-0 text-[11px] font-display truncate">{def ? cardName(def) : cardNameById(bc.cardId)}</span>
+                                  {maxed && (
+                                    <span
+                                      title={t('gacha.maxedTitle', { max: MAX_COPIES_PER_CARD })}
+                                      className="text-[8px] font-display px-1 py-0.5 rounded border border-amber-500/40 text-amber-300"
                                     >
-                                      <span className="flex-1 min-w-0 text-[11px] font-display truncate">{def ? cardName(def) : cardNameById(bc.cardId)}</span>
-                                      {maxed && (
-                                        <span
-                                          title={t('gacha.maxedTitle', { max: MAX_COPIES_PER_CARD })}
-                                          className="text-[8px] font-display px-1 py-0.5 rounded border border-amber-500/40 text-amber-300"
-                                        >
-                                          {t('gacha.maxBadge')}
-                                        </span>
-                                      )}
-                                      <span className="text-[9px] font-body opacity-60">{t(`common.rarity.${rarity}`)}</span>
-                                      <span className="w-12 text-right text-[11px] font-display tabular-nums">
-                                        {((probabilities[bc.cardId] ?? 0) * 100).toFixed(1)}%
-                                      </span>
-                                    </div>
-                                  );
-                                })}
-                            </div>
-                          </div>
-                        </>
-                      )}
-                    </>
+                                      {t('gacha.maxBadge')}
+                                    </span>
+                                  )}
+                                  <span className="text-[9px] font-body opacity-60">{t(`common.rarity.${rarity}`)}</span>
+                                  <span className="w-12 text-right text-[11px] font-display tabular-nums">
+                                    {((probabilities[bc.cardId] ?? 0) * 100).toFixed(1)}%
+                                  </span>
+                                </div>
+                              );
+                            })}
+                        </div>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="flex flex-col items-center justify-center gap-3 py-12 text-purple-300/30">
+                      <span className="text-6xl opacity-40">🎁</span>
+                      <span className="font-display text-[10px] tracking-[0.2em] uppercase">{t('gacha.title')}</span>
+                    </div>
                   )}
-                </div>
-
-                {/* Footer */}
-                <div className="px-4 py-2 border-t border-purple-500/10 bg-[hsl(220,18%,10%)]">
-                  <p className="text-[10px] font-body text-purple-400/30 flex items-center gap-1">
-                    <span className="text-purple-400/60">❯</span> {t('gacha.footerHint')}
-                  </p>
-                </div>
+                </TerminalPanel>
               </div>
 
-              {/* Collection summary — separate panel */}
+              {/* Collection summary — full width */}
               <div className="w-full rounded-lg border border-purple-500/15 bg-[hsl(220,20%,8%)]/90 backdrop-blur-md overflow-hidden">
                 <div className="flex items-center gap-2 px-4 py-2 border-b border-purple-500/10 bg-[hsl(220,18%,10%)]">
                   <span className="text-[10px] font-body text-purple-400/50 tracking-wider uppercase">
                     {t('gacha.collection')}
                   </span>
                 </div>
-                <div className="p-3 grid grid-cols-3 gap-2">
+                <div className="p-3 grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-2">
                   {cards.map((def) => {
                     const qty = collection[def.id] ?? 0;
                     const rarity = getRarity(def);
@@ -346,7 +335,7 @@ export default function GachaScreen({ onBack }: Props) {
                         <img
                           src={resolveCardImage(def.image)}
                           alt={cardName(def)}
-                          className="w-5 h-5 object-contain rounded shrink-0"
+                          className="w-7 h-7 object-contain rounded shrink-0"
                           onError={(event) => {
                             const img = event.currentTarget;
                             if (img.dataset.fallbackApplied === 'true') return;
@@ -406,7 +395,7 @@ export default function GachaScreen({ onBack }: Props) {
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              className="flex flex-col items-center gap-6 w-full max-w-lg"
+              className="flex flex-col items-center gap-6 w-full max-w-4xl"
             >
               <div className="w-full rounded-lg border border-purple-500/20 bg-[hsl(220,20%,8%)]/90 backdrop-blur-md shadow-[0_0_40px_-10px_hsl(260,80%,60%,0.15)] overflow-hidden">
                 <div className="flex items-center gap-2 px-4 py-2 border-b border-purple-500/10 bg-[hsl(220,18%,10%)]">
@@ -425,7 +414,7 @@ export default function GachaScreen({ onBack }: Props) {
                     {t('gacha.newRecruits')}
                   </h2>
 
-                  <div className="flex gap-3 sm:gap-5 justify-center w-full">
+                  <div className="flex flex-wrap gap-3 sm:gap-5 justify-center w-full">
                     {pulled.map(({ def, repetida, oro }, i) => {
                       const revealed = i <= revealedIdx;
                       const rarity = getRarity(def);
@@ -445,7 +434,7 @@ export default function GachaScreen({ onBack }: Props) {
                             <motion.div
                               initial={{ opacity: 0 }}
                               animate={{ opacity: 1 }}
-                              className={`relative flex flex-col items-center gap-2 p-4 sm:p-5 rounded-lg bg-gradient-to-b from-[hsl(220,15%,14%)] to-[hsl(220,18%,10%)] border-2 ${RARITY_COLORS[rarity]} backdrop-blur-sm shadow-lg ${RARITY_GLOW[rarity]} w-24 sm:w-32`}
+                              className={`relative flex flex-col items-center gap-2 p-4 sm:p-5 rounded-lg bg-gradient-to-b from-[hsl(220,15%,14%)] to-[hsl(220,18%,10%)] border-2 ${RARITY_COLORS[rarity]} backdrop-blur-sm shadow-lg ${RARITY_GLOW[rarity]} w-24 sm:w-36 lg:w-40`}
                             >
                               {repetida && (
                                 <span className="absolute -top-2 left-1/2 -translate-x-1/2 whitespace-nowrap text-[8px] sm:text-[9px] font-display tracking-wider px-1.5 py-0.5 rounded bg-amber-900/90 border border-amber-500/50 text-amber-200">
@@ -455,7 +444,7 @@ export default function GachaScreen({ onBack }: Props) {
                               <img
                                 src={resolveCardImage(def.image)}
                                 alt={cardName(def)}
-                                className={`w-12 h-12 sm:w-16 sm:h-16 object-contain rounded ${repetida ? 'opacity-50 grayscale' : ''}`}
+                                className={`w-12 h-12 sm:w-20 sm:h-20 object-contain rounded ${repetida ? 'opacity-50 grayscale' : ''}`}
                                 onError={(event) => {
                                   const img = event.currentTarget;
                                   if (img.dataset.fallbackApplied === 'true') return;
@@ -479,7 +468,7 @@ export default function GachaScreen({ onBack }: Props) {
                               )}
                             </motion.div>
                           ) : (
-                            <div className="flex flex-col items-center justify-center p-4 sm:p-5 rounded-lg bg-gradient-to-b from-purple-900/20 to-[hsl(220,18%,10%)] border-2 border-purple-700/30 w-24 sm:w-32 h-32 sm:h-40">
+                            <div className="flex flex-col items-center justify-center p-4 sm:p-5 rounded-lg bg-gradient-to-b from-purple-900/20 to-[hsl(220,18%,10%)] border-2 border-purple-700/30 w-24 sm:w-36 lg:w-40 h-32 sm:h-48">
                               <span className="text-3xl sm:text-4xl opacity-50">❓</span>
                             </div>
                           )}

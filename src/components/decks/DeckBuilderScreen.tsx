@@ -200,7 +200,7 @@ export default function DeckBuilderScreen({ userId, editing, onBack, onSaved }: 
       <div className="fixed top-1/3 left-1/4 w-72 h-72 bg-emerald-500/5 rounded-full blur-[120px] pointer-events-none" />
       <div className="fixed bottom-1/4 right-1/3 w-60 h-60 bg-teal-500/4 rounded-full blur-[100px] pointer-events-none" />
 
-      <div className="relative z-10 max-w-6xl mx-auto px-3 py-4 sm:px-6 sm:py-6 flex flex-col h-[100dvh]">
+      <div className="relative z-10 max-w-7xl mx-auto px-3 py-4 sm:px-6 sm:py-6 flex flex-col h-[100dvh]">
         {/* Header */}
         <div className="flex items-center justify-between mb-3 gap-2">
           <BackButton onClick={handleBack} color="emerald" />
@@ -231,7 +231,8 @@ export default function DeckBuilderScreen({ userId, editing, onBack, onSaved }: 
             </span>
           </div>
           <div className="p-3">
-            <div className="flex items-center gap-2 mb-2">
+            <div className="flex flex-col lg:flex-row lg:items-center gap-2 lg:gap-6">
+            <div className="flex items-center gap-2 lg:w-[40%] lg:shrink-0">
               <Popover open={emojiOpen} onOpenChange={setEmojiOpen}>
                 <PopoverTrigger asChild>
                   <button
@@ -274,7 +275,7 @@ export default function DeckBuilderScreen({ userId, editing, onBack, onSaved }: 
                 className="flex-1 min-w-0 bg-[hsl(220,15%,12%)] border border-emerald-800/30 rounded-md px-3 py-2 text-emerald-100 font-display text-sm placeholder:text-emerald-200/25 focus:outline-none focus:border-emerald-500/50"
               />
             </div>
-            <div className="flex flex-wrap items-center gap-x-3 gap-y-2 text-xs font-body">
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-2 text-xs font-body lg:flex-1">
               <span className="text-cyan-300/70">⚡ {stats.byType.programador} {t('decks.stat.prog')}</span>
               <span className="text-emerald-300/70">🛡 {stats.byType.qa} {t('decks.stat.qa')}</span>
               <span className="text-violet-300/70">🧪 {stats.byType.consumible} {t('decks.stat.cons')}</span>
@@ -306,6 +307,7 @@ export default function DeckBuilderScreen({ userId, editing, onBack, onSaved }: 
                   {total}/{DECK_SIZE}
                 </span>
               </div>
+            </div>
             </div>
             {collectionError ? (
               <div className="mt-2 flex items-center gap-2 text-[11px] font-body text-red-300">
@@ -345,7 +347,7 @@ export default function DeckBuilderScreen({ userId, editing, onBack, onSaved }: 
         </div>
 
         {/* Two columns desktop / tabs mobile */}
-        <div className="flex-1 grid sm:grid-cols-2 gap-3 min-h-0">
+        <div className="flex-1 grid sm:grid-cols-2 xl:grid-cols-[minmax(0,3fr)_minmax(0,2fr)] gap-3 min-h-0">
           {/* Catalog */}
           <div className={`${tab === 'catalog' ? 'flex' : 'hidden'} sm:flex flex-col rounded-lg border border-emerald-500/15 bg-[hsl(220,20%,8%)]/90 backdrop-blur-md overflow-hidden`}>
             <div className="px-3 py-2 border-b border-emerald-500/10 bg-[hsl(220,18%,10%)] space-y-2">
@@ -390,14 +392,14 @@ export default function DeckBuilderScreen({ userId, editing, onBack, onSaved }: 
                 </label>
               </div>
             </div>
-            <div className="flex-1 overflow-y-auto p-2 space-y-1.5">
+            <div className="flex-1 overflow-y-auto p-2 space-y-1.5 xl:space-y-0 xl:grid xl:grid-cols-2 xl:gap-1.5 xl:content-start">
               {collectionLoading && (
-                <div className="flex justify-center py-6">
+                <div className="flex justify-center py-6 xl:col-span-2">
                   <Loader2 className="w-5 h-5 text-emerald-300/60 animate-spin" />
                 </div>
               )}
               {!collectionLoading && catalog.length === 0 && (
-                <div className="text-center py-8 text-emerald-200/40 font-body text-xs">
+                <div className="text-center py-8 text-emerald-200/40 font-body text-xs xl:col-span-2">
                   {onlyOwned && ownedDistinct === 0
                     ? t('decks.builder.emptyCollection')
                     : t('decks.builder.noMatch')}
@@ -448,7 +450,7 @@ export default function DeckBuilderScreen({ userId, editing, onBack, onSaved }: 
                   onClick={(e) => {
                     if (dirty && !confirm(t('decks.unsavedConfirm'))) e.preventDefault();
                   }}
-                  className="block text-center py-3 text-[11px] font-body text-purple-300/70 hover:text-purple-200 underline-offset-2 hover:underline"
+                  className="block text-center py-3 text-[11px] font-body text-purple-300/70 hover:text-purple-200 underline-offset-2 hover:underline xl:col-span-2"
                 >
                   {t('decks.builder.getMore')}
                 </Link>

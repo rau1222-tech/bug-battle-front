@@ -110,7 +110,7 @@ export default function CardCreatorScreen({ onBack }: Props) {
       <div className="fixed top-1/4 left-1/3 w-72 h-72 bg-cyan-500/5 rounded-full blur-[120px] pointer-events-none" />
       <div className="fixed bottom-1/4 right-1/3 w-72 h-72 bg-blue-500/5 rounded-full blur-[120px] pointer-events-none" />
 
-      <div className="relative z-10 max-w-6xl mx-auto px-3 py-4 sm:px-6 sm:py-6">
+      <div className="relative z-10 max-w-7xl mx-auto px-3 py-4 sm:px-6 sm:py-6">
         <div className="flex items-center justify-between mb-3 gap-2">
           <BackButton onClick={onBack} color="cyan" />
           <h1 className="font-display text-sm sm:text-lg text-cyan-100 tracking-wider text-glow-blue">
@@ -295,7 +295,7 @@ export default function CardCreatorScreen({ onBack }: Props) {
             </button>
           </form>
 
-          <div className="rounded-lg border border-cyan-500/20 bg-[hsl(220,20%,8%)]/90 backdrop-blur-md p-4">
+          <div className="rounded-lg border border-cyan-500/20 bg-[hsl(220,20%,8%)]/90 backdrop-blur-md p-4 lg:sticky lg:top-6">
             <h2 className="text-xs font-display tracking-wider text-cyan-100 mb-3">{t('cards.preview')}</h2>
             <CardPreview card={preview} />
             <p className={`mt-3 mx-auto w-fit px-2 py-0.5 rounded border text-[10px] font-display tracking-wider ${RARITY_COLORS[rareza]}`}>

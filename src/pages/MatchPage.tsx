@@ -111,29 +111,45 @@ function MatchScreen({ matchId }: { matchId: string }) {
     const link = `${window.location.origin}${ROUTES.ONLINE}?code=${match.code}`;
     return (
       <div className={shell}>
-        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className={panel}>
-          <p className="text-[10px] font-body text-cyan-400/50 uppercase tracking-widest">{t('game.match.shareCode')}</p>
-          <button
-            onClick={() => copy('code', match.code)}
-            className="font-display text-4xl tracking-[0.35em] text-cyan-100 bg-cyan-500/10 border border-cyan-400/40 rounded-lg px-5 py-3"
-            title={t('game.match.copyCodeTitle')}
-          >
-            {match.code}
-          </button>
-          <div className="flex gap-4">
-            <button className={ghostBtn} onClick={() => copy('code', match.code)}>            {copied === 'code' ? t('game.match.copied') : t('game.match.copyCode')}</button>
-                        <button className={ghostBtn} onClick={() => copy('link', link)}>{copied === 'link' ? t('game.match.copied') : t('game.match.copyLink')}</button>
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="w-full max-w-3xl rounded-lg border border-cyan-500/20 bg-[hsl(220,20%,8%)]/90 shadow-[0_0_40px_-10px_hsl(200,100%,50%,0.15)] p-6 sm:p-8 grid sm:grid-cols-2 gap-6 sm:gap-8 items-center"
+        >
+          <div className="flex flex-col items-center gap-4">
+            <p className="text-[10px] font-body text-cyan-400/50 uppercase tracking-widest">{t('game.match.shareCode')}</p>
+            <button
+              onClick={() => copy('code', match.code)}
+              className="font-display text-4xl tracking-[0.35em] text-cyan-100 bg-cyan-500/10 border border-cyan-400/40 rounded-lg px-5 py-3 hover:bg-cyan-500/15 transition-colors"
+              title={t('game.match.copyCodeTitle')}
+            >
+              {match.code}
+            </button>
+            <div className="flex gap-4">
+              <button className={ghostBtn} onClick={() => copy('code', match.code)}>{copied === 'code' ? t('game.match.copied') : t('game.match.copyCode')}</button>
+              <button className={ghostBtn} onClick={() => copy('link', link)}>{copied === 'link' ? t('game.match.copied') : t('game.match.copyLink')}</button>
+            </div>
           </div>
-          <motion.p
-            animate={{ opacity: [0.4, 1, 0.4] }}
-            transition={{ duration: 2, repeat: Infinity }}
-            className="text-sm font-body text-cyan-200/70"
-          >
-            {t('game.match.waiting')}
-          </motion.p>
-          <button className="font-display text-xs tracking-wider text-red-300/70 hover:text-red-200" onClick={() => void exit()}>
-            {t('game.match.cancel')}
-          </button>
+          <div className="flex flex-col items-center gap-4 sm:border-l sm:border-cyan-500/15 sm:pl-8">
+            <div className="relative w-20 h-20 flex items-center justify-center">
+              <motion.div
+                className="absolute inset-0 rounded-full border-4 border-cyan-500/20 border-t-cyan-300"
+                animate={{ rotate: 360 }}
+                transition={{ duration: 1.6, repeat: Infinity, ease: 'linear' }}
+              />
+              <span className="text-3xl">🐛</span>
+            </div>
+            <motion.p
+              animate={{ opacity: [0.4, 1, 0.4] }}
+              transition={{ duration: 2, repeat: Infinity }}
+              className="text-sm font-body text-cyan-200/70"
+            >
+              {t('game.match.waiting')}
+            </motion.p>
+            <button className="font-display text-xs tracking-wider text-red-300/70 hover:text-red-200" onClick={() => void exit()}>
+              {t('game.match.cancel')}
+            </button>
+          </div>
         </motion.div>
       </div>
     );

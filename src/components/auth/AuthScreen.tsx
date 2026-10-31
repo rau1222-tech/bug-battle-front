@@ -2,6 +2,9 @@ import { useState } from 'react';
 import { motion } from 'framer-motion';
 import { translateAuthError } from '@/constants/authErrors';
 import LanguageSwitcher from '@/components/LanguageSwitcher';
+import BrandHero from '@/components/layout/BrandHero';
+import FeatureList from '@/components/layout/FeatureList';
+import TerminalPanel from '@/components/layout/TerminalPanel';
 import { useI18n } from '@/i18n';
 
 interface AuthScreenProps {
@@ -73,10 +76,10 @@ export default function AuthScreen({ onSignInEmail, onSignUpEmail, onSignInGoogl
   };
 
   return (
-    <div className="h-[100dvh] w-full flex flex-col items-center justify-center relative overflow-hidden bg-[hsl(220,20%,6%)] bg-grid-pattern">
+    <div className="min-h-[100dvh] w-full flex items-center relative overflow-hidden bg-[hsl(220,20%,6%)] bg-grid-pattern">
       {/* Ambient glow effects */}
-      <div className="absolute top-1/4 left-1/3 w-72 h-72 bg-cyan-500/5 rounded-full blur-[100px] pointer-events-none" />
-      <div className="absolute bottom-1/3 right-1/4 w-60 h-60 bg-purple-500/5 rounded-full blur-[100px] pointer-events-none" />
+      <div className="absolute top-1/4 left-[15%] w-96 h-96 bg-cyan-500/5 rounded-full blur-[120px] pointer-events-none" />
+      <div className="absolute bottom-1/4 right-[15%] w-80 h-80 bg-purple-500/5 rounded-full blur-[120px] pointer-events-none" />
 
       <LanguageSwitcher className="fixed top-4 right-4 z-30" />
 
@@ -84,41 +87,20 @@ export default function AuthScreen({ onSignInEmail, onSignUpEmail, onSignInGoogl
         initial={{ opacity: 0, y: 30 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.7, ease: 'easeOut' }}
-        className="z-10 w-full max-w-sm px-4"
+        className="z-10 w-full max-w-5xl mx-auto px-4 sm:px-8 py-16 grid lg:grid-cols-2 gap-8 lg:gap-16 items-center"
       >
-        {/* Logo section */}
-        <div className="text-center mb-8">
-          <motion.div
-            animate={{ y: [0, -5, 0], rotate: [0, 3, -3, 0] }}
-            transition={{ duration: 4, repeat: Infinity, ease: 'easeInOut' }}
-            className="text-6xl mb-3 inline-block"
-          >
-            🐛
-          </motion.div>
-          <h1 className="text-3xl font-display font-bold text-cyan-100 tracking-[0.2em] text-glow-blue">
-            BUG HUNTERS
-          </h1>
-          <p className="text-xs font-body text-cyan-300/40 mt-1 tracking-wider uppercase">
-            {t('auth.tagline')}
-          </p>
-        </div>
+        <BrandHero tagline={t('auth.tagline')}>
+          <FeatureList />
+        </BrandHero>
 
         {/* Terminal-style panel */}
-        <div className="rounded-lg border border-cyan-500/20 bg-[hsl(220,20%,8%)]/90 backdrop-blur-md shadow-[0_0_40px_-10px_hsl(200,100%,50%,0.15)] overflow-hidden">
-          {/* Terminal title bar */}
-          <div className="flex items-center gap-2 px-4 py-2 border-b border-cyan-500/10 bg-[hsl(220,18%,10%)]">
-            <div className="flex gap-1.5">
-              <div className="w-2.5 h-2.5 rounded-full bg-red-500/70" />
-              <div className="w-2.5 h-2.5 rounded-full bg-yellow-500/70" />
-              <div className="w-2.5 h-2.5 rounded-full bg-green-500/70" />
-            </div>
-            <span className="ml-2 text-[10px] font-body text-cyan-400/50 tracking-wider uppercase">
-              ~/bug-hunters/auth
-            </span>
-          </div>
-
-          {/* Panel content */}
-          <div className="p-4 flex flex-col gap-3">
+        <TerminalPanel
+          path="~/bug-hunters/auth"
+          footer={t('auth.googleFooter')}
+          className="w-full max-w-sm mx-auto lg:max-w-md lg:mr-0"
+          bodyClassName="sm:p-6"
+        >
+          <div className="flex flex-col gap-3">
             {/* Tabs */}
             <div className="flex gap-1 bg-[hsl(220,15%,10%)] rounded-md p-1">
               <button
@@ -225,14 +207,7 @@ export default function AuthScreen({ onSignInEmail, onSignUpEmail, onSignInGoogl
               </motion.button>
             </form>
           </div>
-
-          {/* Terminal footer */}
-          <div className="px-4 py-2 border-t border-cyan-500/10 bg-[hsl(220,18%,10%)]">
-            <p className="text-[10px] font-body text-cyan-400/30 flex items-center gap-1">
-              <span className="text-green-400/60">❯</span> {t('auth.googleFooter')}
-            </p>
-          </div>
-        </div>
+        </TerminalPanel>
       </motion.div>
     </div>
   );

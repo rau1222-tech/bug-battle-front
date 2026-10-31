@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { motion } from 'framer-motion';
+import BackButton from '@/components/ui/BackButton';
+import TerminalPanel from '@/components/layout/TerminalPanel';
 import { useAuthContext } from '@/contexts/AuthContext';
 import { deckDisplayName, getActiveDeckId, useDecks } from '@/hooks/useDecks';
 import { cancelRandomMatch, createMatch, findRandomMatch, joinMatch } from '@/hooks/useOnlineMatch';
@@ -119,21 +121,24 @@ export default function OnlinePage() {
   const codeValid = CODE_RE.test(code);
 
   return (
-    <div className="min-h-[100dvh] w-full flex flex-col items-center justify-center bg-[hsl(220,20%,6%)] bg-grid-pattern px-4 py-8">
+    <div className="min-h-[100dvh] w-full relative bg-[hsl(220,20%,6%)] bg-grid-pattern">
+      <div className="fixed top-1/4 left-1/4 w-80 h-80 bg-cyan-500/5 rounded-full blur-[120px] pointer-events-none" />
+      <div className="fixed bottom-1/4 right-1/4 w-72 h-72 bg-fuchsia-500/5 rounded-full blur-[120px] pointer-events-none" />
+
+      <div className="relative z-10 max-w-6xl mx-auto px-4 py-6 sm:px-6 sm:py-10">
+        <div className="flex items-center justify-between mb-6 gap-2">
+          <BackButton onClick={() => navigate(ROUTES.HOME)} color="cyan" />
+          <h1 className="font-display text-lg sm:text-2xl text-cyan-100 tracking-[0.2em] text-glow-blue">{t('online.title')}</h1>
+          <div className="w-20" />
+        </div>
+
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
-        className="w-full max-w-md rounded-lg border border-cyan-500/20 bg-[hsl(220,20%,8%)]/90 backdrop-blur-md shadow-[0_0_40px_-10px_hsl(200,100%,50%,0.15)] p-5 flex flex-col gap-5"
+        className="grid lg:grid-cols-[minmax(0,7fr)_minmax(0,5fr)] gap-4 items-start"
       >
-        <div className="flex items-center justify-between">
-          <button onClick={() => navigate(ROUTES.HOME)} className="text-xs font-display text-cyan-300/60 hover:text-cyan-200">
-            {t('online.back')}
-          </button>
-          <h1 className="font-display text-cyan-100 tracking-[0.2em] text-lg">{t('online.title')}</h1>
-          <span className="w-12" />
-        </div>
-
-        <section className="flex flex-col gap-2">
+        <TerminalPanel path="~/bug-hunters/online/deck" bodyClassName="sm:p-5">
+        <section className="flex flex-col gap-3">
           <h2 className="text-[10px] font-body text-cyan-400/50 uppercase tracking-widest">{t('online.chooseDeck')}</h2>
           {loading ? (
             <p className="text-xs text-cyan-200/40 font-body">{t('online.loadingDecks')}</p>
@@ -143,26 +148,35 @@ export default function OnlinePage() {
               <button className="underline" onClick={() => navigate(ROUTES.DECKS)}>{t('online.goToDecks')}</button>
             </p>
           ) : (
-            <div className="grid grid-cols-2 gap-2 max-h-48 overflow-y-auto pr-1">
+            <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-2 max-h-[60vh] overflow-y-auto pr-1">
               {validDecks.map((d) => (
                 <button
                   key={d.id}
                   disabled={searching}
                   onClick={() => setDeckId(d.id)}
-                  className={`h-12 px-3 rounded-md border text-left flex items-center gap-2 transition-colors ${
+                  className={`p-3 rounded-md border text-left flex items-center gap-3 transition-colors disabled:cursor-not-allowed ${
                     deckId === d.id
-                      ? 'border-cyan-400/70 bg-cyan-500/15 text-cyan-100'
+                      ? 'border-cyan-400/70 bg-cyan-500/15 text-cyan-100 shadow-[0_0_15px_-5px_hsl(200,100%,50%,0.4)]'
                       : 'border-cyan-900/40 bg-[hsl(220,15%,12%)] text-cyan-200/60 hover:border-cyan-600/50'
                   }`}
                 >
-                  <span className="text-lg">{d.cover_emoji}</span>
-                  <span className="font-display text-[11px] tracking-wide truncate">{deckDisplayName(d)}</span>
+                  <span className="text-3xl shrink-0">{d.cover_emoji}</span>
+                  <span className="min-w-0 flex flex-col gap-1">
+                    <span className="font-display text-[11px] tracking-wide truncate">{deckDisplayName(d)}</span>
+                    <span className="flex gap-2 text-[10px] font-body opacity-70">
+                      <span>⚡ {d.programadores}</span>
+                      <span>🛡 {d.qas}</span>
+                      {d.consumibles > 0 && <span>🧪 {d.consumibles}</span>}
+                    </span>
+                  </span>
                 </button>
               ))}
             </div>
           )}
         </section>
+        </TerminalPanel>
 
+        <TerminalPanel path="~/bug-hunters/online/lobby" bodyClassName="sm:p-5 flex flex-col gap-5">
         <section className="flex flex-col gap-2">
           <h2 className="text-[10px] font-body text-cyan-400/50 uppercase tracking-widest">{t('online.randomTitle')}</h2>
           {searchStartedAt !== null ? (
@@ -229,7 +243,9 @@ export default function OnlinePage() {
         </section>
 
         {error && <p role="alert" className="text-xs text-red-300 font-body">⚠️ {ERROR_KEYS[error] ? t(ERROR_KEYS[error]) : error}</p>}
+        </TerminalPanel>
       </motion.div>
+      </div>
     </div>
   );
 }
