@@ -5,21 +5,32 @@ import { supabase } from '@/integrations/supabase/client';
 /** card_id → total copies owned */
 export type Collection = Record<string, number>;
 
-/** Must match public.open_pack() in the DB */
-export const PACK_COST = 100;
-export const CARDS_PER_PACK = 3;
+/** Must match the limit enforced by public.open_banner_pack() and player_collection_quantity_max_check. */
+export const MAX_COPIES_PER_CARD = 2;
 
-export type Rarity = 'comun' | 'raro' | 'epico';
+/** One drawn card: duplicates beyond MAX_COPIES_PER_CARD are converted into `oro` by the server. */
+export interface PackPull {
+  cardId: string;
+  repetida: boolean;
+  oro: number;
+}
 
-/** Gacha weight stored in cards.gacha_peso for each rarity; must stay consistent with getRarity thresholds. */
+export type Rarity = 'comun' | 'raro' | 'epico' | 'legendario';
+
+/**
+ * Gacha weight stored in cards.gacha_peso for each rarity; must stay consistent with getRarity thresholds
+ * and with public.card_rarity() in the DB.
+ */
 export const RARITY_GACHA_WEIGHT: Record<Rarity, number> = {
   comun: 60,
   raro: 30,
   epico: 10,
+  legendario: 5,
 };
 
 export function getRarity(def: CardTemplate): Rarity {
   if (def.gachaPeso !== undefined) {
+    if (def.gachaPeso <= 5) return 'legendario';
     if (def.gachaPeso <= 10) return 'epico';
     if (def.gachaPeso <= 30) return 'raro';
     return 'comun';
@@ -34,18 +45,21 @@ export const RARITY_COLORS: Record<Rarity, string> = {
   comun: 'text-stone-300 border-stone-500/40',
   raro: 'text-blue-300 border-blue-500/50',
   epico: 'text-purple-300 border-purple-500/50',
+  legendario: 'text-yellow-300 border-yellow-400/60',
 };
 
 export const RARITY_LABELS: Record<Rarity, string> = {
   comun: 'Común',
   raro: 'Raro',
   epico: 'Épico',
+  legendario: 'Legendario',
 };
 
 export const RARITY_GLOW: Record<Rarity, string> = {
   comun: '',
   raro: 'shadow-blue-500/30',
   epico: 'shadow-purple-500/40',
+  legendario: 'shadow-yellow-400/50',
 };
 
 /* ── Hook ── */
@@ -103,18 +117,32 @@ export function useCollection(userId: string | null | undefined) {
 
   const refresh = useCallback(() => setReloadKey((k) => k + 1), []);
 
-  /** Spends coins and stores the pulled cards atomically on the server; returns pulled card ids. */
-  const buyPack = useCallback(async (): Promise<string[]> => {
-    const { data, error: rpcErr } = await supabase.rpc('open_pack');
+  /**
+   * Opens a pack from the given banner. The server checks the banner is active, charges its cost,
+   * draws the cards by appearance weight and stores them atomically. Cards already owned at the copy
+   * limit are converted into gold by the server instead of being added.
+   */
+  const buyPack = useCallback(async (bannerId: string): Promise<PackPull[]> => {
+    const { data, error: rpcErr } = await supabase.rpc('open_banner_pack', { p_banner_id: bannerId });
     if (rpcErr) throw new Error(rpcErr.message);
-    const result = data as { gold: number; cards: string[] };
+    const result = data as {
+      gold: number;
+      results?: { card_id: string; repetida: boolean; oro: number }[];
+      cards?: string[];
+    };
+    // Older versions of open_banner_pack only return `cards` (no duplicate conversion): every card was added.
+    const pulls: PackPull[] = result.results
+      ? result.results.map((r) => ({ cardId: r.card_id, repetida: r.repetida, oro: r.oro }))
+      : (result.cards ?? []).map((cardId) => ({ cardId, repetida: false, oro: 0 }));
     setCoins(result.gold);
     setCollection((prev) => {
       const next = { ...prev };
-      for (const id of result.cards) next[id] = (next[id] ?? 0) + 1;
+      for (const p of pulls) {
+        if (!p.repetida) next[p.cardId] = (next[p.cardId] ?? 0) + 1;
+      }
       return next;
     });
-    return result.cards;
+    return pulls;
   }, []);
 
   return { collection, coins, loading, error, refresh, buyPack };

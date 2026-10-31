@@ -1,6 +1,6 @@
 import { Lock } from 'lucide-react';
 import { CardTemplate, CardType, DEFAULT_CARD_IMAGE, resolveCardImage } from '@/constants';
-import { getRarity, RARITY_LABELS } from '@/hooks/useCollection';
+import { getRarity, RARITY_LABELS, type Rarity } from '@/hooks/useCollection';
 
 interface Props {
   def: CardTemplate;
@@ -18,7 +18,12 @@ const TYPE_STYLES: Record<CardType, { border: string; tag: string; label: string
   consumible: { border: 'border-violet-500/40', tag: 'bg-violet-800/60 text-violet-100', label: 'Consumible' },
 };
 
-const RARITY_TEXT = { comun: 'text-stone-300/70', raro: 'text-blue-300', epico: 'text-purple-300' } as const;
+const RARITY_TEXT: Record<Rarity, string> = {
+  comun: 'text-stone-300/70',
+  raro: 'text-blue-300',
+  epico: 'text-purple-300',
+  legendario: 'text-yellow-300',
+};
 
 export default function DeckCardThumb({ def, quantity, owned, onClick, disabled, small }: Props) {
   const style = TYPE_STYLES[def.tipo] ?? TYPE_STYLES.programador;
