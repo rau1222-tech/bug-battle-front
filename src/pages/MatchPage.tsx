@@ -10,6 +10,50 @@ const shell = 'min-h-[100dvh] w-full flex flex-col items-center justify-center g
 const panel = 'w-full max-w-sm rounded-lg border border-cyan-500/20 bg-[hsl(220,20%,8%)]/90 p-6 flex flex-col items-center gap-4';
 const ghostBtn = 'font-display text-xs tracking-wider text-cyan-300/60 hover:text-cyan-200';
 
+function MatchLoading({ rival }: { rival: string | null }) {
+  return (
+    <div className={shell}>
+      <motion.div initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} className={panel}>
+        <div className="relative w-24 h-24 flex items-center justify-center">
+          <motion.div
+            className="absolute inset-0 rounded-full border-4 border-cyan-500/20 border-t-cyan-300"
+            animate={{ rotate: 360 }}
+            transition={{ duration: 1.1, repeat: Infinity, ease: 'linear' }}
+          />
+          <motion.span
+            className="text-4xl"
+            animate={{ scale: [1, 1.15, 1], rotate: [-8, 8, -8] }}
+            transition={{ duration: 1.4, repeat: Infinity, ease: 'easeInOut' }}
+          >
+            🐛
+          </motion.span>
+        </div>
+        <h2 className="font-display text-xl tracking-wider text-cyan-100">
+          {rival ? '¡RIVAL ENCONTRADO!' : 'PREPARANDO PARTIDA'}
+        </h2>
+        {rival && <p className="font-body text-sm text-cyan-200/80">Tú vs <span className="text-amber-200">{rival}</span></p>}
+        <motion.p
+          animate={{ opacity: [0.4, 1, 0.4] }}
+          transition={{ duration: 1.8, repeat: Infinity }}
+          className="text-xs font-body text-cyan-300/70"
+        >
+          La partida comenzará en breves momentos…
+        </motion.p>
+        <div className="flex gap-1.5">
+          {[0, 1, 2].map((i) => (
+            <motion.span
+              key={i}
+              className="w-2 h-2 rounded-full bg-cyan-400"
+              animate={{ y: [0, -6, 0], opacity: [0.4, 1, 0.4] }}
+              transition={{ duration: 0.9, repeat: Infinity, delay: i * 0.15 }}
+            />
+          ))}
+        </div>
+      </motion.div>
+    </div>
+  );
+}
+
 export default function MatchPage() {
   const { matchId } = useParams<{ matchId: string }>();
   if (!matchId) return <Navigate to={ROUTES.ONLINE} replace />;
@@ -57,7 +101,7 @@ function MatchScreen({ matchId }: { matchId: string }) {
   }
 
   if (!match) {
-    return <div className={`${shell} text-cyan-300/60 font-display text-sm tracking-wider`}>Conectando…</div>;
+    return <MatchLoading rival={null} />;
   }
 
   if (match.status === 'waiting') {
@@ -93,6 +137,8 @@ function MatchScreen({ matchId }: { matchId: string }) {
   }
 
   if (!game) {
+    // The server is still dealing the first hand
+    if (match.status === 'active') return <MatchLoading rival={opponentName} />;
     return (
       <div className={shell}>
         <div className={panel}>
