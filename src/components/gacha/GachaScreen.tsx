@@ -1,19 +1,31 @@
-import { useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { toast } from 'sonner';
 import BackButton from '@/components/ui/BackButton';
+import BannerEditorModal from '@/components/gacha/BannerEditorModal';
 import { DEFAULT_CARD_IMAGE, resolveCardImage, type CardTemplate } from '@/constants';
 import { useAuthContext } from '@/contexts/AuthContext';
+import { useBanners } from '@/hooks/useBanners';
 import { useCards } from '@/hooks/useCards';
 import {
   useCollection,
-  PACK_COST,
-  CARDS_PER_PACK,
   getRarity,
+  MAX_COPIES_PER_CARD,
   RARITY_COLORS,
   RARITY_LABELS,
   RARITY_GLOW,
+  type PackPull,
 } from '@/hooks/useCollection';
+import {
+  appearanceProbabilities,
+  BANNER_STATUS_LABELS,
+  formatBannerDate,
+  getBannerStatus,
+  isBannerActive,
+  type Banner,
+  type BannerDraft,
+  type BannerStatus,
+} from '@/lib/banners';
 
 interface Props {
   onBack: () => void;
@@ -21,29 +33,75 @@ interface Props {
 
 type Phase = 'shop' | 'opening' | 'reveal';
 
+interface PulledCard {
+  def: CardTemplate;
+  repetida: boolean;
+  oro: number;
+}
+
+const STATUS_CLASSES: Record<BannerStatus, string> = {
+  activo: 'text-emerald-300 border-emerald-500/40',
+  programado: 'text-amber-300 border-amber-500/40',
+  finalizado: 'text-stone-400 border-stone-500/40',
+};
+
+const STATUS_REFRESH_MS = 30_000;
+
 export default function GachaScreen({ onBack }: Props) {
-  const { user } = useAuthContext();
+  const { user, profile } = useAuthContext();
+  const isAdmin = profile.admin;
   const { cards } = useCards();
   const { collection, coins, loading, buyPack } = useCollection(user.id);
+  const { banners, loading: bannersLoading, error: bannersError, saveBanner } = useBanners();
   const [phase, setPhase] = useState<Phase>('shop');
-  const [pulled, setPulled] = useState<CardTemplate[]>([]);
+  const [pulled, setPulled] = useState<PulledCard[]>([]);
   const [revealedIdx, setRevealedIdx] = useState(-1);
   const [buying, setBuying] = useState(false);
+  const [selectedBannerId, setSelectedBannerId] = useState<string | null>(null);
+  const [editor, setEditor] = useState<{ open: boolean; banner: Banner | null }>({ open: false, banner: null });
+  const [now, setNow] = useState(() => new Date());
+
+  // Re-evaluates banner availability so a banner that starts/ends while the screen is open updates its state.
+  useEffect(() => {
+    const id = setInterval(() => setNow(new Date()), STATUS_REFRESH_MS);
+    return () => clearInterval(id);
+  }, []);
+
+  const cardsById = useMemo(() => new Map(cards.map((c) => [c.id, c])), [cards]);
+  const visibleBanners = useMemo(
+    () => (isAdmin ? banners : banners.filter((b) => isBannerActive(b, now))),
+    [banners, isAdmin, now],
+  );
+  const selectedBanner =
+    visibleBanners.find((b) => b.id === selectedBannerId) ??
+    visibleBanners.find((b) => isBannerActive(b, now)) ??
+    visibleBanners[0] ??
+    null;
+  const selectedStatus = selectedBanner ? getBannerStatus(selectedBanner, now) : null;
+  const canAfford = selectedBanner ? coins >= selectedBanner.coste : false;
+  const canBuy =
+    !!selectedBanner && selectedStatus === 'activo' && selectedBanner.cards.length > 0 && canAfford && !loading && !buying;
+  const probabilities = useMemo(
+    () => appearanceProbabilities(selectedBanner?.cards ?? []),
+    [selectedBanner],
+  );
 
   const handleBuyPack = async () => {
-    if (buying) return;
+    if (!selectedBanner || buying) return;
     setBuying(true);
-    let ids: string[];
+    let pulls: PackPull[];
     try {
-      ids = await buyPack();
+      pulls = await buyPack(selectedBanner.id);
     } catch (e) {
       toast.error(e instanceof Error ? e.message : 'No se pudo abrir el sobre');
       return;
     } finally {
       setBuying(false);
     }
-    const byId = new Map(cards.map((c) => [c.id, c]));
-    const results = ids.map((id) => byId.get(id)).filter((c): c is CardTemplate => !!c);
+    const results = pulls.flatMap((p) => {
+      const def = cardsById.get(p.cardId);
+      return def ? [{ def, repetida: p.repetida, oro: p.oro }] : [];
+    });
     setPulled(results);
     setRevealedIdx(-1);
     setPhase('opening');
@@ -64,6 +122,14 @@ export default function GachaScreen({ onBack }: Props) {
   };
 
   const allRevealed = revealedIdx >= pulled.length - 1;
+  const duplicateGold = pulled.reduce((sum, p) => sum + (p.repetida ? p.oro : 0), 0);
+
+  const handleSaveBanner = async (draft: BannerDraft) => {
+    const isNew = !editor.banner;
+    const id = await saveBanner(editor.banner?.id ?? null, draft);
+    setSelectedBannerId(id);
+    toast.success(isNew ? 'Banner creado' : 'Banner actualizado');
+  };
 
   return (
     <div className="min-h-[100dvh] w-full relative bg-[hsl(220,20%,6%)] bg-grid-pattern">
@@ -115,36 +181,141 @@ export default function GachaScreen({ onBack }: Props) {
                     📦 RECLUTAMIENTO
                   </h1>
                   <p className="text-sm font-body text-purple-200/50 text-center">
-                    Recluta nuevos miembros para tu equipo. Cada sobre contiene {CARDS_PER_PACK} cartas.
+                    Elige un banner y recluta nuevos miembros para tu equipo.
                   </p>
 
-                  {/* Pack visual */}
-                  <motion.button
-                    onClick={() => { void handleBuyPack(); }}
-                    disabled={loading || buying || coins < PACK_COST}
-                    whileHover={{ scale: coins >= PACK_COST ? 1.05 : 1 }}
-                    whileTap={{ scale: coins >= PACK_COST ? 0.95 : 1 }}
-                    className="relative flex flex-col items-center gap-3 p-6 sm:p-8 rounded-lg bg-gradient-to-b from-purple-600/20 to-purple-900/20 border-2 border-purple-500/30 backdrop-blur-sm shadow-[0_0_30px_-10px_hsl(260,80%,60%,0.25)] transition-all hover:border-purple-400/50 hover:shadow-[0_0_40px_-10px_hsl(260,80%,60%,0.4)] disabled:opacity-40 disabled:cursor-not-allowed group"
-                  >
-                    <motion.span
-                      animate={{ rotate: [0, -3, 3, -3, 0] }}
-                      transition={{ duration: 2, repeat: Infinity, ease: 'easeInOut' }}
-                      className="text-6xl sm:text-7xl"
+                  {isAdmin && (
+                    <button
+                      type="button"
+                      onClick={() => setEditor({ open: true, banner: null })}
+                      className="px-3 py-1.5 rounded-md bg-purple-600/30 border border-purple-500/30 text-purple-100 font-display text-[10px] tracking-[0.15em] hover:bg-purple-600/50 transition-colors"
                     >
-                      🎁
-                    </motion.span>
-                    <span className="font-display text-base text-purple-100 tracking-wide">
-                      Sobre de Reclutamiento
-                    </span>
-                    <span className="flex items-center gap-1.5 font-display text-sm text-purple-300/80">
-                      🪙 {PACK_COST}
-                    </span>
-                    {!loading && coins < PACK_COST && (
-                      <span className="text-xs font-body text-red-400/80 mt-1">
-                        Monedas insuficientes
-                      </span>
-                    )}
-                  </motion.button>
+                      ＋ NUEVO BANNER
+                    </button>
+                  )}
+
+                  {bannersLoading ? (
+                    <p className="text-xs font-body text-purple-300/50 animate-pulse">Cargando banners...</p>
+                  ) : bannersError ? (
+                    <p className="text-xs font-body text-red-400/80 text-center">No se pudieron cargar los banners: {bannersError}</p>
+                  ) : visibleBanners.length === 0 ? (
+                    <p className="text-xs font-body text-purple-300/50 text-center">
+                      No hay banners activos ahora mismo. ¡Vuelve más tarde!
+                    </p>
+                  ) : (
+                    <>
+                      {/* Banner selector */}
+                      <div className="w-full flex flex-col gap-2">
+                        {visibleBanners.map((b) => {
+                          const status = getBannerStatus(b, now);
+                          const selected = selectedBanner?.id === b.id;
+                          return (
+                            <button
+                              key={b.id}
+                              type="button"
+                              onClick={() => setSelectedBannerId(b.id)}
+                              className={`w-full text-left px-3 py-2 rounded-md border transition-all ${selected ? 'border-purple-400/60 bg-purple-600/20' : 'border-purple-500/15 bg-[hsl(220,15%,12%)] hover:border-purple-400/30'}`}
+                            >
+                              <div className="flex items-center justify-between gap-2">
+                                <span className="font-display text-xs text-purple-100 truncate">{b.titulo}</span>
+                                <span className={`shrink-0 text-[9px] font-display px-1.5 py-0.5 rounded border ${STATUS_CLASSES[status]}`}>
+                                  {BANNER_STATUS_LABELS[status]}
+                                </span>
+                              </div>
+                              <p className="text-[10px] font-body text-purple-300/50 mt-0.5">
+                                {formatBannerDate(b.fechaInicio)} → {formatBannerDate(b.fechaFin)}
+                              </p>
+                            </button>
+                          );
+                        })}
+                      </div>
+
+                      {selectedBanner && (
+                        <>
+                          {/* Pack visual */}
+                          <motion.button
+                            onClick={() => { void handleBuyPack(); }}
+                            disabled={!canBuy}
+                            whileHover={{ scale: canBuy ? 1.05 : 1 }}
+                            whileTap={{ scale: canBuy ? 0.95 : 1 }}
+                            className="relative flex flex-col items-center gap-3 p-6 sm:p-8 rounded-lg bg-gradient-to-b from-purple-600/20 to-purple-900/20 border-2 border-purple-500/30 backdrop-blur-sm shadow-[0_0_30px_-10px_hsl(260,80%,60%,0.25)] transition-all hover:border-purple-400/50 hover:shadow-[0_0_40px_-10px_hsl(260,80%,60%,0.4)] disabled:opacity-40 disabled:cursor-not-allowed group"
+                          >
+                            <motion.span
+                              animate={{ rotate: [0, -3, 3, -3, 0] }}
+                              transition={{ duration: 2, repeat: Infinity, ease: 'easeInOut' }}
+                              className="text-6xl sm:text-7xl"
+                            >
+                              🎁
+                            </motion.span>
+                            <span className="font-display text-base text-purple-100 tracking-wide text-center">
+                              {selectedBanner.titulo}
+                            </span>
+                            <span className="flex items-center gap-1.5 font-display text-sm text-purple-300/80">
+                              🪙 {selectedBanner.coste} · {selectedBanner.cartasPorSobre} cartas
+                            </span>
+                            {selectedStatus === 'programado' && (
+                              <span className="text-xs font-body text-amber-300/80 mt-1">Aún no ha comenzado</span>
+                            )}
+                            {selectedStatus === 'finalizado' && (
+                              <span className="text-xs font-body text-stone-400 mt-1">Banner finalizado</span>
+                            )}
+                            {selectedStatus === 'activo' && selectedBanner.cards.length === 0 && (
+                              <span className="text-xs font-body text-red-400/80 mt-1">Este banner no tiene cartas</span>
+                            )}
+                            {selectedStatus === 'activo' && !loading && !canAfford && (
+                              <span className="text-xs font-body text-red-400/80 mt-1">Monedas insuficientes</span>
+                            )}
+                          </motion.button>
+
+                          {isAdmin && (
+                            <button
+                              type="button"
+                              onClick={() => setEditor({ open: true, banner: selectedBanner })}
+                              className="px-3 py-1.5 rounded-md border border-purple-500/30 text-purple-200 font-display text-[10px] tracking-[0.15em] hover:bg-purple-600/20 transition-colors"
+                            >
+                              ✏️ EDITAR BANNER
+                            </button>
+                          )}
+
+                          {/* Banner card pool: probability from the banner weight, rarity from the card's own weight */}
+                          <div className="w-full">
+                            <p className="text-[10px] font-display uppercase tracking-widest text-purple-300/50 mb-2">
+                              Cartas del banner
+                            </p>
+                            <div className="flex flex-col gap-1">
+                              {[...selectedBanner.cards]
+                                .sort((a, b) => b.pesoAparicion - a.pesoAparicion)
+                                .map((bc) => {
+                                  const def = cardsById.get(bc.cardId);
+                                  const rarity = def ? getRarity(def) : 'comun';
+                                  const maxed = (collection[bc.cardId] ?? 0) >= MAX_COPIES_PER_CARD;
+                                  return (
+                                    <div
+                                      key={bc.cardId}
+                                      className={`flex items-center gap-2 px-2.5 py-1.5 rounded-md bg-[hsl(220,15%,12%)] border ${RARITY_COLORS[rarity]}`}
+                                    >
+                                      <span className="flex-1 min-w-0 text-[11px] font-display truncate">{def?.nombre ?? bc.cardId}</span>
+                                      {maxed && (
+                                        <span
+                                          title={`Ya tienes ${MAX_COPIES_PER_CARD} copias: si te toca se convertirá en oro`}
+                                          className="text-[8px] font-display px-1 py-0.5 rounded border border-amber-500/40 text-amber-300"
+                                        >
+                                          MÁX
+                                        </span>
+                                      )}
+                                      <span className="text-[9px] font-body opacity-60">{RARITY_LABELS[rarity]}</span>
+                                      <span className="w-12 text-right text-[11px] font-display tabular-nums">
+                                        {((probabilities[bc.cardId] ?? 0) * 100).toFixed(1)}%
+                                      </span>
+                                    </div>
+                                  );
+                                })}
+                            </div>
+                          </div>
+                        </>
+                      )}
+                    </>
+                  )}
                 </div>
 
                 {/* Footer */}
@@ -254,7 +425,7 @@ export default function GachaScreen({ onBack }: Props) {
                   </h2>
 
                   <div className="flex gap-3 sm:gap-5 justify-center w-full">
-                    {pulled.map((def, i) => {
+                    {pulled.map(({ def, repetida, oro }, i) => {
                       const revealed = i <= revealedIdx;
                       const rarity = getRarity(def);
                       return (
@@ -273,12 +444,17 @@ export default function GachaScreen({ onBack }: Props) {
                             <motion.div
                               initial={{ opacity: 0 }}
                               animate={{ opacity: 1 }}
-                              className={`flex flex-col items-center gap-2 p-4 sm:p-5 rounded-lg bg-gradient-to-b from-[hsl(220,15%,14%)] to-[hsl(220,18%,10%)] border-2 ${RARITY_COLORS[rarity]} backdrop-blur-sm shadow-lg ${RARITY_GLOW[rarity]} w-24 sm:w-32`}
+                              className={`relative flex flex-col items-center gap-2 p-4 sm:p-5 rounded-lg bg-gradient-to-b from-[hsl(220,15%,14%)] to-[hsl(220,18%,10%)] border-2 ${RARITY_COLORS[rarity]} backdrop-blur-sm shadow-lg ${RARITY_GLOW[rarity]} w-24 sm:w-32`}
                             >
+                              {repetida && (
+                                <span className="absolute -top-2 left-1/2 -translate-x-1/2 whitespace-nowrap text-[8px] sm:text-[9px] font-display tracking-wider px-1.5 py-0.5 rounded bg-amber-900/90 border border-amber-500/50 text-amber-200">
+                                  REPETIDA
+                                </span>
+                              )}
                               <img
                                 src={resolveCardImage(def.image)}
                                 alt={def.nombre}
-                                className="w-12 h-12 sm:w-16 sm:h-16 object-contain rounded"
+                                className={`w-12 h-12 sm:w-16 sm:h-16 object-contain rounded ${repetida ? 'opacity-50 grayscale' : ''}`}
                                 onError={(event) => {
                                   const img = event.currentTarget;
                                   if (img.dataset.fallbackApplied === 'true') return;
@@ -293,7 +469,9 @@ export default function GachaScreen({ onBack }: Props) {
                               <span className={`text-[10px] font-body ${RARITY_COLORS[rarity]}`}>
                                 {RARITY_LABELS[rarity]}
                               </span>
-                              {def.potencia !== undefined && (
+                              {repetida ? (
+                                <span className="text-xs font-display text-amber-300">+{oro} 🪙</span>
+                              ) : def.potencia !== undefined && (
                                 <span className="text-xs font-display text-purple-300/80">
                                   ⚔️ {def.potencia}
                                 </span>
@@ -308,6 +486,17 @@ export default function GachaScreen({ onBack }: Props) {
                       );
                     })}
                   </div>
+
+                  {allRevealed && duplicateGold > 0 && (
+                    <motion.p
+                      initial={{ opacity: 0, y: 6 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      className="text-xs font-body text-amber-200/90 text-center"
+                    >
+                      Las cartas repetidas (ya tenías {MAX_COPIES_PER_CARD} copias) se han convertido en{' '}
+                      <span className="font-display text-amber-300">+{duplicateGold} 🪙</span>
+                    </motion.p>
+                  )}
 
                   <motion.button
                     onClick={handleRevealNext}
@@ -324,6 +513,16 @@ export default function GachaScreen({ onBack }: Props) {
         </AnimatePresence>
         </div>
       </div>
+
+      {isAdmin && (
+        <BannerEditorModal
+          open={editor.open}
+          onOpenChange={(open) => setEditor((current) => ({ ...current, open }))}
+          banner={editor.banner}
+          cards={cards}
+          onSave={handleSaveBanner}
+        />
+      )}
     </div>
   );
 }

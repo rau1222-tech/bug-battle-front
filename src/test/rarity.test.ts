@@ -8,3 +8,18 @@ describe('RARITY_GACHA_WEIGHT', () => {
     expect(getRarity(card)).toBe(rarity);
   });
 });
+
+describe('getRarity thresholds', () => {
+  it.each<[number, Rarity]>([
+    [1, 'legendario'],
+    [5, 'legendario'],
+    [6, 'epico'],
+    [10, 'epico'],
+    [11, 'raro'],
+    [30, 'raro'],
+    [31, 'comun'],
+  ])('gacha_peso %i is %s', (gachaPeso, rarity) => {
+    const card = { id: 'x', nombre: 'x', tipo: 'programador', coste: 1, descripcion: '', habilidades: [], gachaPeso } as CardTemplate;
+    expect(getRarity(card)).toBe(rarity);
+  });
+});

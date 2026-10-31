@@ -5,7 +5,7 @@ import BackButton from '@/components/ui/BackButton';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { DECK_SIZE, MAX_COPIES, type CardTemplate, type CardType } from '@/constants';
 import { saveDeckRecord, type DeckCardEntry, type DeckSummary } from '@/hooks/useDecks';
-import { useCollection, getRarity } from '@/hooks/useCollection';
+import { useCollection, getRarity, type Rarity } from '@/hooks/useCollection';
 import { useCards } from '@/hooks/useCards';
 import { ROUTES } from '@/routes';
 import DeckCardThumb from './DeckCardThumb';
@@ -22,7 +22,7 @@ const EMOJI_OPTIONS = ['🃏', '⚔️', '🛡️', '⚖️', '🚀', '🐛', '�
 const DEFAULT_EMOJI = '🃏';
 const TYPE_ORDER: CardType[] = ['programador', 'qa', 'consumible'];
 const TYPE_LABELS: Record<CardType, string> = { programador: 'Programadores', qa: 'QA', consumible: 'Consumibles' };
-const RARITY_ORDER = { epico: 0, raro: 1, comun: 2 } as const;
+const RARITY_ORDER: Record<Rarity, number> = { legendario: 0, epico: 1, raro: 2, comun: 3 };
 const COST_BUCKETS = ['1', '2', '3+'];
 type SortKey = 'coste' | 'nombre' | 'rareza';
 
