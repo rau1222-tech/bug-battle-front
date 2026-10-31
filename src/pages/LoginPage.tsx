@@ -3,6 +3,7 @@ import AuthScreen from '@/components/auth/AuthScreen';
 import { useAuth } from '@/hooks/useAuth';
 import { useProfile } from '@/hooks/useProfile';
 import { ROUTES } from '@/routes';
+import { translateAuthError } from '@/constants/authErrors';
 
 function LoadingScreen() {
   return (
@@ -28,15 +29,15 @@ export default function LoginPage() {
     <AuthScreen
       onSignInEmail={async (email, password) => {
         const err = await signInWithEmail(email, password);
-        return { error: err?.message ?? null };
+        return { error: err ? translateAuthError(err.message) : null };
       }}
       onSignUpEmail={async (email, password) => {
         const err = await signUpWithEmail(email, password);
-        return { error: err?.message ?? null };
+        return { error: err ? translateAuthError(err.message) : null };
       }}
       onSignInGoogle={async () => {
         const err = await signInWithGoogle();
-        return { error: err?.message ?? null };
+        return { error: err ? translateAuthError(err.message) : null };
       }}
     />
   );

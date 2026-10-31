@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { motion } from 'framer-motion';
+import { translateAuthError } from '@/constants/authErrors';
 
 interface AuthScreenProps {
   onSignInEmail: (email: string, password: string) => Promise<{ error: string | null }>;
@@ -16,6 +17,8 @@ export default function AuthScreen({ onSignInEmail, onSignUpEmail, onSignInGoogl
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState<string | null>(null);
 
+  const isValidEmail = (value: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
@@ -23,6 +26,11 @@ export default function AuthScreen({ onSignInEmail, onSignUpEmail, onSignInGoogl
 
     if (!email || !password) {
       setError('Completa todos los campos');
+      return;
+    }
+
+    if (!isValidEmail(email)) {
+      setError('El formato del correo electrónico no es válido');
       return;
     }
 
@@ -40,10 +48,10 @@ export default function AuthScreen({ onSignInEmail, onSignUpEmail, onSignInGoogl
     try {
       if (mode === 'login') {
         const { error: err } = await onSignInEmail(email, password);
-        if (err) setError(err);
+        if (err) setError(translateAuthError(err));
       } else {
         const { error: err } = await onSignUpEmail(email, password);
-        if (err) setError(err);
+        if (err) setError(translateAuthError(err));
         else setSuccess('¡Cuenta creada! Revisa tu email para confirmar.');
       }
     } finally {
@@ -56,7 +64,7 @@ export default function AuthScreen({ onSignInEmail, onSignUpEmail, onSignInGoogl
     setLoading(true);
     const { error: err } = await onSignInGoogle();
     if (err) {
-      setError(err);
+      setError(translateAuthError(err));
       setLoading(false);
     }
   };
