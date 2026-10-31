@@ -8,7 +8,7 @@ import { useNavigate } from 'react-router-dom';
 
 export default function HomePage() {
   const navigate = useNavigate();
-  const { user, profile, signOut } = useAuthContext();
+  const { user, profile, signOut, updateProfile } = useAuthContext();
   const { decks } = useDecks(user.id);
   const [activeId, setActiveId] = useState<string | null>(null);
 
@@ -137,7 +137,12 @@ export default function HomePage() {
       </motion.div>
 
       {/* Profile menu - top right */}
-      <ProfileMenu profile={profile} email={user.email} onSignOut={() => { void signOut(); }} />
+      <ProfileMenu
+        profile={profile}
+        email={user.email}
+        onSignOut={() => { void signOut(); }}
+        onSaveProfile={updateProfile}
+      />
     </div>
   );
 }

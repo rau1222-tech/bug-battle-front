@@ -24,3 +24,7 @@ dist-ssr
 *.sw?
 .env
 package-lock.json
+
+# Local Supabase database dump (npm run db:dump)
+supabase/dump/
+scripts/dump-supabase.mjs

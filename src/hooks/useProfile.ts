@@ -12,6 +12,8 @@ export interface Profile {
   active_deck_id: string | null;
 }
 
+export type ProfileUpdate = Partial<Pick<Profile, 'display_name' | 'avatar_url'>>;
+
 const CACHE_KEY = 'bb_profile_';
 
 function getCachedProfile(uid: string): Profile | null {
@@ -136,15 +138,19 @@ export function useProfile(user: User | null) {
     setNeedsSetup(false);
   }, [user?.id]);
 
-  const updateName = useCallback(async (newName: string) => {
-    if (!user) return;
-    const { error } = await supabase
+  const updateProfile = useCallback(async (changes: ProfileUpdate) => {
+    if (!user) throw new Error('No hay sesión activa');
+    const { data, error } = await supabase
       .from('players')
-      .update({ display_name: newName })
-      .eq('id', user.id);
-    if (!error) setProfile((p) => p ? { ...p, display_name: newName } : p);
-    return error;
+      .update(changes)
+      .eq('id', user.id)
+      .select('id, display_name, avatar_url, gold, wins, losses, active_deck_id')
+      .single();
+    if (error) throw error;
+    setProfile(data);
+    cacheProfile(data);
+    return data;
   }, [user?.id]);
 
-  return { profile, loading, needsSetup, createProfile, updateName };
+  return { profile, loading, needsSetup, createProfile, updateProfile };
 }

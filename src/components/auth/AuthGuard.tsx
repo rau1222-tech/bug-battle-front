@@ -15,7 +15,7 @@ function LoadingScreen() {
 export default function AuthGuard() {
   const location = useLocation();
   const { user, loading: authLoading, signOut } = useAuth();
-  const { profile, needsSetup, loading: profileLoading } = useProfile(user);
+  const { profile, needsSetup, loading: profileLoading, updateProfile } = useProfile(user);
 
   if (authLoading || (user && profileLoading)) {
     return <LoadingScreen />;
@@ -44,7 +44,7 @@ export default function AuthGuard() {
   };
 
   return (
-    <AuthContext.Provider value={{ user, profile: safeProfile, signOut }}>
+    <AuthContext.Provider value={{ user, profile: safeProfile, signOut, updateProfile }}>
       <Outlet />
     </AuthContext.Provider>
   );
