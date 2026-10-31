@@ -3,7 +3,7 @@ import { Navigate, useNavigate, useParams } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { GameBoardView } from '@/components/game/GameBoard';
 import { useAuthContext } from '@/contexts/AuthContext';
-import { leaveMatch, useOnlineMatch } from '@/hooks/useOnlineMatch';
+import { deleteMatch, leaveMatch, useOnlineMatch } from '@/hooks/useOnlineMatch';
 import { ROUTES } from '@/routes';
 
 const shell = 'min-h-[100dvh] w-full flex flex-col items-center justify-center gap-4 bg-[hsl(220,20%,6%)] bg-grid-pattern px-4 text-center';
@@ -31,6 +31,7 @@ function MatchScreen({ matchId }: { matchId: string }) {
         console.error('Failed to leave match:', e);
       }
     }
+    await deleteMatch(matchId);
     navigate(ROUTES.ONLINE);
   };
 

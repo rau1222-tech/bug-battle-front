@@ -50,6 +50,14 @@ export async function findRandomMatch(deckId: string): Promise<string | null> {
   return (data as string | null) ?? null;
 }
 
+/** Idempotent: whoever calls second simply finds nothing to delete. */
+export async function deleteMatch(matchId: string): Promise<void> {
+  const { error } = await supabase.rpc('delete_match', { p_match_id: matchId });
+  if (error) console.error('Failed to delete match:', error.message);
+}
+
+const DEFS = new Map(CARD_DEFINITIONS.map((d) => [d.id, d]));
+
 /** Leaves the random queue; returns a match id if a pairing happened just before cancelling. */
 export async function cancelRandomMatch(): Promise<string | null> {
   const { data, error } = await supabase.rpc('cancel_random_match');
@@ -158,6 +166,9 @@ export function useOnlineMatch(matchId: string, userId: string) {
   const view = snap?.view ?? null;
   const version = snap?.version ?? -1;
   const status = match?.status;
+  useEffect(() => {
+    if (status === 'finished' || status === 'abandoned') void deleteMatch(matchId);
+  }, [status, matchId]);
   const you: Side = view?.you ?? (match?.host_id === userId ? 'p1' : 'p2');
 
   const showError = useCallback((text: string) => {
