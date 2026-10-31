@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { CARD_DEFINITIONS, type CardInstance } from '@/constants';
-import type { EngineCard, GameMessage, MatchAction, MatchView, Side } from '@/game/onlineEngine';
+import { BUG_MAX_COMPLEXITY, type EngineCard, type GameMessage, type MatchAction, type MatchView, type Side } from '@/game/onlineEngine';
 import { useI18n } from '@/i18n';
 
 export type BugState = 'idle' | 'hit' | 'death';
@@ -25,6 +25,9 @@ export interface ControllerLastAction {
 
 export interface GameController {
   bugComplexity: number;
+  bugMaxComplexity: number;
+  /** Counterattack damage the Bug deals to whoever hit it during their turn. */
+  bugPower: number;
   bugState: BugState;
   playerHand: CardInstance[];
   /** Slot-based table: fixed length TABLE_MAX, null = empty slot */
@@ -124,6 +127,8 @@ export function useMatchController(view: MatchView | null, opts: ControllerOptio
     const la = view.lastAction;
     return {
       bugComplexity: view.bugComplexity,
+      bugMaxComplexity: view.bug?.maxHp ?? BUG_MAX_COMPLEXITY,
+      bugPower: view.bug?.potencia ?? 0,
       bugState: view.bugComplexity === 0 ? 'death' : bugHit ? 'hit' : 'idle',
       playerHand: (me.hand ?? []).map(hydrate),
       playerTable: hydrateTable(me.table),

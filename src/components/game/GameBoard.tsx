@@ -618,7 +618,7 @@ export function GameBoardView({ game, onExit, playerId, playerName: playerNamePr
 
         {/* CENTER — Bug */}
         <div data-drop-target="bug" className="flex items-center justify-center py-2 relative z-10">
-          <BugCentral complexity={game.bugComplexity} bugState={game.bugState} id="bug-central" />
+          <BugCentral complexity={game.bugComplexity} maxComplexity={game.bugMaxComplexity} power={game.bugPower} bugState={game.bugState} id="bug-central" />
           {draggingConsumableTarget === 'bug' && dragOverTargetId === 'bug' && (
             <motion.div
               initial={{ opacity: 0.3, scale: 0.92 }}

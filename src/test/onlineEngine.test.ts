@@ -118,7 +118,7 @@ describe('onlineEngine', () => {
     expect(state.sides.p2.energy).toBe(ENERGY_PER_TURN);
   });
 
-  it('caps energy and pays the last-hit bonus only once', () => {
+  it('caps energy and pays the hit bonus only once', () => {
     let s = withTables(start(), [card('mid-dev', 'a')], []);
     s = applyAction(s, { type: 'ATTACK_BUG', side: 'p1', cardId: 'a' }).state;
     s = { ...s, sides: { ...s.sides, p1: { ...s.sides.p1, energy: 0 } } };
@@ -129,6 +129,36 @@ describe('onlineEngine', () => {
     s = applyAction(s, { type: 'END_TURN', side: 'p1' }).state;
     s = applyAction(s, { type: 'END_TURN', side: 'p2' }).state;
     expect(s.sides.p1.energy).toBe(2 * ENERGY_PER_TURN + 1);
+  });
+
+  it('keeps the hit bonus even if the rival hits the Bug afterwards, and counts skill damage', () => {
+    let s = withTables(start(), [card('devops', 'd')], [card('mid-dev', 'm')]);
+    s = applyAction(s, { type: 'USE_SKILL', side: 'p1', cardId: 'd', skillIndex: 0 }).state;
+    s = { ...s, sides: { ...s.sides, p1: { ...s.sides.p1, energy: 0 } } };
+    s = applyAction(s, { type: 'END_TURN', side: 'p1' }).state;
+    s = applyAction(s, { type: 'ATTACK_BUG', side: 'p2', cardId: 'm' }).state;
+    s = applyAction(s, { type: 'END_TURN', side: 'p2' }).state;
+    expect(s.sides.p1.energy).toBe(ENERGY_PER_TURN + 1);
+    expect(s.sides.p2.hitBonus).toBe(1);
+  });
+
+  it('the Bug strikes back at the strongest card of whoever hit it that turn', () => {
+    let s = withTables(start(), [card('junior-dev', 'j'), card('senior-dev', 'sr')], [card('mid-dev', 'm')]);
+    s = applyAction(s, { type: 'ATTACK_BUG', side: 'p1', cardId: 'j' }).state;
+    s = applyAction(s, { type: 'END_TURN', side: 'p1' }).state;
+    expect(s.sides.p1.table[1]!.cordura).toBe(4 - s.bug.potencia);
+    expect(s.sides.p1.table[0]!.cordura).toBe(2);
+    expect(s.message).toMatch(/^🐛 .* · ⏭️ /);
+    s = applyAction(s, { type: 'END_TURN', side: 'p2' }).state;
+    expect(s.sides.p2.table[0]!.cordura).toBe(3);
+  });
+
+  it('the Bug counterattack can destroy a card', () => {
+    let s = withTables(start(), [card('junior-dev', 'j', { cordura: 1 })], []);
+    s = applyAction(s, { type: 'ATTACK_BUG', side: 'p1', cardId: 'j' }).state;
+    s = applyAction(s, { type: 'END_TURN', side: 'p1' }).state;
+    expect(s.sides.p1.table.every((c) => c === null)).toBe(true);
+    expect(s.msg?.key).toBe('bugCounterKill');
   });
 
   it('expires a 1-turn buff at the end of its owner\'s turn, not the rival\'s', () => {

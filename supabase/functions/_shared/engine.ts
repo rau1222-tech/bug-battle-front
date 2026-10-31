@@ -49,6 +49,21 @@ export interface DeckEntry {
   quantity: number;
 }
 
+export interface BugRule {
+  id: string;
+  nombre: string;
+  vida: number;
+  /** Counterattack damage dealt at the end of a turn in which the Bug was hit. */
+  potencia: number;
+}
+
+export interface BugInstance {
+  id: string;
+  hp: number;
+  maxHp: number;
+  potencia: number;
+}
+
 export const BUG_MAX_COMPLEXITY = 10;
 export const INITIAL_DRAW = 4;
 export const TABLE_MAX = 4;
@@ -77,6 +92,10 @@ export const CARD_RULES: CardRule[] = [
   { id: 'hotfix', nombre: 'Hotfix de Emergencia', tipo: 'consumible', coste: 2, descripcion: '2 de daño directo al Bug.', habilidades: [[8, 2, 2, 0]] },
 ];
 
+export const BUG_RULES: BugRule[] = [
+  { id: 'nullpointer', nombre: 'NullPointer', vida: BUG_MAX_COMPLEXITY, potencia: 1 },
+];
+
 export const SKILL_RULES: Record<number, SkillRule> = {
   3: { id: 3, nombre: 'Par Programming', descripcion: 'Aumenta la potencia de una carta aliada este turno.', objetivo: 'carta_aliada', accionTipo: 'APLICAR_ESTADO', efectoTipo: 'buff_ataque' },
   4: { id: 4, nombre: 'QA Testing', descripcion: 'Devuelve una carta enemiga a la mano del rival (se descarta si su mano está llena).', objetivo: 'carta_enemiga', accionTipo: 'DEVOLVER_MANO' },
@@ -99,6 +118,8 @@ export type MessageParams = Record<string, string | number>;
 export interface GameMessage {
   key: string;
   params?: MessageParams;
+  /** A follow-up message rendered after this one in the same log entry. */
+  then?: GameMessage;
 }
 
 /** Spanish templates; used to fill the legacy `message`/`error` strings. */
@@ -115,6 +136,8 @@ export const ENGINE_MESSAGES_ES: Record<string, string> = {
   buff: '🤝 {skill} ({name}): {target} +{value} por {turns} turno(s). (-{cost}⚡)',
   heal: '☕ {skill} ({name}): {target} recupera {value} cordura (-{cost}⚡)',
   bugKilled: '🎉 {name} eliminó el Bug! +1 punto',
+  bugCounter: '🐛 El Bug contraataca a {target} ({name}). 🧠 {cordura}/{corduraMax}',
+  bugCounterKill: '🐛 El Bug contraataca y destruye a {target} ({name})!',
   turnLimit: '⏱️ Límite de turnos: {winner} gana la ronda por daño ({p1}-{p2})',
   endTurn: '⏭️ {name} termina su turno — turno de {next} (+{gain}⚡)',
   endTurnBonus: '⏭️ {name} termina su turno — turno de {next} (+{gain}⚡ con bonus)',
@@ -147,13 +170,14 @@ export interface MessageFormatter {
 export function formatGameMessage(msg: GameMessage, f: MessageFormatter): string {
   const tpl = f.template(msg.key) ?? msg.key;
   const params = msg.params ?? {};
-  return tpl.replace(/\{(\w+)\}/g, (whole, name: string) => {
+  const text = tpl.replace(/\{(\w+)\}/g, (whole, name: string) => {
     const v = params[name];
     if (v === undefined) return whole;
     if (name === 'card' || name === 'target') return f.cardName(String(v));
     if (name === 'skill') return f.skillName(Number(v));
     return String(v);
   });
+  return msg.then ? `${text} · ${formatGameMessage(msg.then, f)}` : text;
 }
 
 const SPANISH: MessageFormatter = {
@@ -167,8 +191,8 @@ const toSpanish = (msg: GameMessage) => formatGameMessage(msg, SPANISH);
 type Said = { msg: GameMessage; message: string };
 
 /** Message fields for a state: structured `msg` plus the Spanish `message` fallback. */
-const say = (key: string, params?: MessageParams): Said => {
-  const msg: GameMessage = { key, params };
+const say = (key: string, params?: MessageParams, then?: GameMessage): Said => {
+  const msg: GameMessage = then ? { key, params, then } : { key, params };
   return { msg, message: toSpanish(msg) };
 };
 
@@ -217,6 +241,8 @@ export interface SideState {
   turnCount: number;
   /** Damage dealt to the Bug this round (tie-breaker at the turn limit). */
   damage: number;
+  /** Extra energy granted at the start of this side's next turn. */
+  hitBonus: number;
 }
 
 export interface LastAction {
@@ -232,13 +258,16 @@ export interface MatchState {
   decks: Record<Side, DeckEntry[]>;
   names: Record<Side, string>;
   sides: Record<Side, SideState>;
-  bugComplexity: number;
+  bug: BugInstance;
   roundNumber: number;
   roundStarter: Side;
   roundTurns: number;
   gamePhase: MatchPhase;
   turn: Side;
+  /** Winner of the last finished round; the other side starts the next one. */
   lastAttacker: Side | null;
+  /** Whether the side in turn has damaged the Bug during this turn. */
+  hitThisTurn: boolean;
   isFirstTurn: boolean;
   /** Spanish rendering of `msg`, kept for older clients. */
   message: string;
@@ -294,7 +323,13 @@ function dealRound(seed: number, round: number, decks: Record<Side, DeckEntry[]>
 
 function freshSide(dealt: { hand: EngineCard[]; deck: EngineCard[] }, score: number, starts: boolean): SideState {
   // The second player starts at 0⚡ and gains the normal +3⚡ on its first turn, so both open with 3⚡
-  return { hand: dealt.hand, deck: dealt.deck, table: emptyTable(), score, energy: starts ? ENERGY_PER_TURN : 0, maxEnergy: MAX_ENERGY_CAP, turnCount: starts ? 1 : 0, damage: 0 };
+  return { hand: dealt.hand, deck: dealt.deck, table: emptyTable(), score, energy: starts ? ENERGY_PER_TURN : 0, maxEnergy: MAX_ENERGY_CAP, turnCount: starts ? 1 : 0, damage: 0, hitBonus: 0 };
+}
+
+function spawnBug(seed: number, round: number): BugInstance {
+  const random = mulberry32((seed ^ Math.imul(round, 0x85ebca6b)) >>> 0);
+  const rule = BUG_RULES[Math.floor(random() * BUG_RULES.length)];
+  return { id: rule.id, hp: rule.vida, maxHp: rule.vida, potencia: rule.potencia };
 }
 
 export function initMatch(seed: number, decks: Record<Side, DeckEntry[]>, names: Record<Side, string>, starter?: Side): MatchState {
@@ -305,13 +340,14 @@ export function initMatch(seed: number, decks: Record<Side, DeckEntry[]>, names:
     decks,
     names,
     sides: { p1: freshSide(dealt.p1, 0, first === 'p1'), p2: freshSide(dealt.p2, 0, first === 'p2') },
-    bugComplexity: BUG_MAX_COMPLEXITY,
+    bug: spawnBug(seed, 1),
     roundNumber: 1,
     roundStarter: first,
     roundTurns: 0,
     gamePhase: 'playing',
     turn: first,
     lastAttacker: null,
+    hitThisTurn: false,
     isFirstTurn: true,
     ...say('start', { name: names[first] }),
     lastAction: null,
@@ -334,14 +370,32 @@ function endRound(s: MatchState, winner: Side, message: Said): MatchState {
   };
 }
 
-function hitBug(s: MatchState, side: Side, damage: number, message: Said, countsAsAttack: boolean): MatchState {
-  const dealt = Math.min(damage, s.bugComplexity);
-  const hp = s.bugComplexity - dealt;
-  const next = withSide(s, side, { damage: s.sides[side].damage + dealt });
-  if (hp > 0) {
-    return { ...next, bugComplexity: hp, lastAttacker: countsAsAttack ? side : s.lastAttacker, ...message };
-  }
-  return endRound({ ...next, bugComplexity: 0 }, side, say('bugKilled', { name: s.names[side] }));
+function hitBug(s: MatchState, side: Side, damage: number, message: Said): MatchState {
+  const dealt = Math.min(damage, s.bug.hp);
+  const hp = s.bug.hp - dealt;
+  const next: MatchState = { ...withSide(s, side, { damage: s.sides[side].damage + dealt }), bug: { ...s.bug, hp }, hitThisTurn: true };
+  if (hp > 0) return { ...next, ...message };
+  return endRound(next, side, say('bugKilled', { name: s.names[side] }));
+}
+
+/** The Bug strikes the strongest card (leftmost on ties) of the side that hit it this turn. */
+function bugCounter(s: MatchState, side: Side): { state: MatchState; msg?: GameMessage } {
+  if (!s.hitThisTurn || s.bug.potencia <= 0) return { state: s };
+  const table = s.sides[side].table;
+  let idx = -1;
+  table.forEach((c, i) => {
+    if (c && (idx < 0 || potenciaReal(c) > potenciaReal(table[idx]!))) idx = i;
+  });
+  if (idx < 0) return { state: s };
+  const target = table[idx]!;
+  const cordura = target.cordura - s.bug.potencia;
+  const next = [...table];
+  next[idx] = cordura <= 0 ? null : { ...target, cordura };
+  const params = { name: s.names[side], target: target.definition.id };
+  const msg: GameMessage = cordura <= 0
+    ? { key: 'bugCounterKill', params }
+    : { key: 'bugCounter', params: { ...params, cordura, corduraMax: target.definition.corduraMax ?? 0 } };
+  return { state: withSide(s, side, { table: next }), msg };
 }
 
 const reject = (state: MatchState, key: string, params?: MessageParams): ApplyResult => {
@@ -379,13 +433,14 @@ function applyRules(s: MatchState, action: MatchAction): ApplyResult {
           p1: freshSide(dealt.p1, s.sides.p1.score, starter === 'p1'),
           p2: freshSide(dealt.p2, s.sides.p2.score, starter === 'p2'),
         },
-        bugComplexity: BUG_MAX_COMPLEXITY,
+        bug: spawnBug(s.seed, round),
         roundNumber: round,
         roundStarter: starter,
         roundTurns: 0,
         gamePhase: 'playing',
         turn: starter,
         lastAttacker: null,
+        hitThisTurn: false,
         isFirstTurn: true,
         ...say('roundStart', { round, name: s.names[starter] }),
       },
@@ -425,8 +480,8 @@ function applyRules(s: MatchState, action: MatchAction): ApplyResult {
       const cost = card.definition.ataqueCoste ?? 0;
       if (me.energy < cost) return reject(s, 'needEnergyAttack', { cost });
       const next = withSide(s, side, { table: markUsed(me.table, card.instanceId), energy: me.energy - cost });
-      const hp = Math.max(0, s.bugComplexity - dmg);
-      return { state: hitBug(next, side, dmg, say('attackBug', { card: card.definition.id, name, dmg, hp, max: BUG_MAX_COMPLEXITY, cost }), true) };
+      const hp = Math.max(0, s.bug.hp - dmg);
+      return { state: hitBug(next, side, dmg, say('attackBug', { card: card.definition.id, name, dmg, hp, max: s.bug.maxHp, cost })) };
     }
 
     case 'ATTACK_CARD': {
@@ -483,8 +538,8 @@ function applyRules(s: MatchState, action: MatchAction): ApplyResult {
       switch (skill.accionTipo) {
         case 'DANIO_DIRECTO': {
           if (skill.objetivo !== 'bug') return reject(s, 'invalidSkill');
-          const hp = Math.max(0, s.bugComplexity - potencia);
-          return { state: hitBug(paid, side, potencia, say('skillDamage', { icon, skill: skillId, name, dmg: potencia, hp, max: BUG_MAX_COMPLEXITY, cost: coste }), false) };
+          const hp = Math.max(0, s.bug.hp - potencia);
+          return { state: hitBug(paid, side, potencia, say('skillDamage', { icon, skill: skillId, name, dmg: potencia, hp, max: s.bug.maxHp, cost: coste })) };
         }
         case 'DEVOLVER_MANO': {
           if (skill.objetivo !== 'carta_enemiga' || !targetId) return reject(s, 'invalidTarget');
@@ -535,22 +590,26 @@ function applyRules(s: MatchState, action: MatchAction): ApplyResult {
       const next = foe;
       const nextSide = s.sides[next];
       const roundTurns = s.roundTurns + 1;
+      const counter = bugCounter(s, side);
       // Effects belong to the side that cast them and expire at the end of that side's turn
-      let state = withSide(s, side, { table: tickEfectos(me.table).map((c) => (c ? { ...c, disponible: true } : null)) });
+      let state = withSide(counter.state, side, {
+        table: tickEfectos(counter.state.sides[side].table).map((c) => (c ? { ...c, disponible: true } : null)),
+        hitBonus: s.hitThisTurn ? ENERGY_BONUS_HIT : 0,
+      });
 
       if (roundTurns >= MAX_ROUND_TURNS) {
         const dmg = { [side]: me.damage, [foe]: them.damage } as Record<Side, number>;
         const winner: Side = dmg[side] === dmg[foe] ? other(s.roundStarter) : dmg[side] > dmg[foe] ? side : foe;
         return {
           state: endRound(
-            { ...state, roundTurns, isFirstTurn: false },
+            { ...state, roundTurns, isFirstTurn: false, hitThisTurn: false },
             winner,
             say('turnLimit', { winner: s.names[winner], p1: dmg.p1, p2: dmg.p2 }),
           ),
         };
       }
 
-      const bonus = s.lastAttacker === next ? ENERGY_BONUS_HIT : 0;
+      const bonus = nextSide.hitBonus;
       const gain = ENERGY_PER_TURN + bonus;
       const energy = Math.min(MAX_ENERGY_CAP, nextSide.energy + gain);
       const handFull = nextSide.hand.length >= MAX_HAND_SIZE;
@@ -561,16 +620,17 @@ function applyRules(s: MatchState, action: MatchAction): ApplyResult {
         deck: canDraw ? nextSide.deck.slice(1) : nextSide.deck,
         energy,
         turnCount: nextSide.turnCount + 1,
+        hitBonus: 0,
       });
+      const endTurn: GameMessage = { key: `endTurn${bonus ? 'Bonus' : ''}${handFull ? 'Full' : ''}`, params: { name, next: s.names[next], gain } };
       return {
         state: {
           ...state,
           turn: next,
           roundTurns,
           isFirstTurn: false,
-          // The last-hit bonus is paid once
-          lastAttacker: bonus ? null : s.lastAttacker,
-          ...say(`endTurn${bonus ? 'Bonus' : ''}${handFull ? 'Full' : ''}`, { name, next: s.names[next], gain }),
+          hitThisTurn: false,
+          ...(counter.msg ? say(counter.msg.key, counter.msg.params, endTurn) : say(endTurn.key, endTurn.params)),
         },
       };
     }
@@ -606,6 +666,8 @@ export interface MatchView {
   you: Side;
   names: Record<Side, string>;
   sides: Record<Side, SideView>;
+  bug: BugInstance;
+  /** Same as `bug.hp`; kept for older clients. */
   bugComplexity: number;
   roundNumber: number;
   roundTurns: number;
@@ -638,7 +700,8 @@ export function redactFor(s: MatchState, viewer: Side): MatchView {
     you: viewer,
     names: s.names,
     sides: { p1: sideView('p1'), p2: sideView('p2') },
-    bugComplexity: s.bugComplexity,
+    bug: s.bug,
+    bugComplexity: s.bug.hp,
     roundNumber: s.roundNumber,
     roundTurns: s.roundTurns,
     gamePhase: s.gamePhase,

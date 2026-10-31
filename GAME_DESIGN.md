@@ -2,7 +2,7 @@
 
 ## Flujo de una partida
 
-Una partida consta de **3 rondas** (best of 3). Cada ronda tiene un **Bug** con 10 puntos de complejidad. El primer jugador (o bot) en reducirla a 0 gana el punto de esa ronda. Cuando un jugador acumula 2 puntos, gana la partida.
+Una partida consta de **3 rondas** (best of 3). Cada ronda tiene un **Bug** (ver tipos más abajo) con su propia complejidad. El primer jugador (o bot) en reducirla a 0 gana el punto de esa ronda. Cuando un jugador acumula 2 puntos, gana la partida.
 
 - Quien empieza la primera ronda se sortea; cada ronda siguiente la empieza quien perdió la anterior.
 - **Límite de turnos**: tras 30 turnos (sumando ambos jugadores) la ronda la gana quien más daño haya hecho al Bug; en empate, quien no empezó la ronda.
@@ -18,7 +18,7 @@ Una partida consta de **3 rondas** (best of 3). Cada ronda tiene un **Bug** con 
 
 - Cada turno se reciben **3⚡** de energía; la sobrante se acumula hasta un máximo de **10⚡**.
 - El segundo jugador empieza con 0⚡, así ambos abren con 3⚡ (como compensación, el segundo roba en su primer turno).
-- **Bonus**: si golpeaste al Bug con un ataque en tu turno, recibes **+1⚡** extra al empezar tu siguiente turno (una sola vez).
+- **Bonus**: si dañaste al Bug en tu turno (ataque, habilidad o consumible), recibes **+1⚡** extra al empezar tu siguiente turno, aunque el rival le golpee después.
 - La energía se gasta al:
   - **Colocar una carta** de la mano al tablero → gasta el `coste` de invocación de la carta.
   - **Atacar con una carta** → gasta el `ataqueCoste` de la carta.
@@ -48,6 +48,18 @@ El bot usa el mismo motor que el online (`supabase/functions/_shared/engine.ts`)
 3. QA: devolver al mejor programador rival o atacar la carta más vulnerable.
 4. Buffs sobre su mejor atacante, habilidades de daño directo y ataques con todos sus programadores.
 5. Curar aliados, gastar consumibles de daño y pasar turno.
+
+---
+
+## Bugs 🐛
+
+Cada ronda se elige un Bug del catálogo `BUG_RULES` (determinista a partir de la semilla de la partida y el número de ronda).
+
+- **Contraataque**: al final de un turno en el que un jugador ha dañado al Bug, este golpea a la carta con más potencia real de ese jugador (la de más a la izquierda en empate), restando su `potencia` a la cordura. Si llega a 0, la carta se destruye.
+
+| Bug | Vida | Potencia |
+|---|---|---|
+| NullPointer | 10 | 1 |
 
 ---
 
@@ -176,13 +188,13 @@ Las habilidades están definidas en un catálogo centralizado (`SKILLS`). Cada c
 
 | Constante | Valor |
 |---|---|
-| Complejidad del Bug | 10 |
+| Complejidad del Bug | Según el tipo (NullPointer: 10) |
 | Tamaño del mazo | 20 |
 | Robo inicial | 4 cartas |
 | Límite de mano | 6 cartas |
 | Slots en mesa | 4 |
 | Energía por turno | 3 |
-| Bonus por último golpe | +1 |
+| Bonus por dañar al Bug | +1 |
 | Cap máximo de energía | 10 |
 | Rondas máximas | 3 |
 

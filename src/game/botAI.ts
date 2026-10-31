@@ -33,7 +33,7 @@ export function botNextAction(s: MatchState, side: Side): MatchAction {
   if (s.gamePhase === 'round-end') return { type: 'NEXT_ROUND', side };
   const me = s.sides[side];
   const them = s.sides[other(side)];
-  const hp = s.bugComplexity;
+  const hp = s.bug.hp;
   const mine = me.table.filter(isCard);
   const ready = mine.filter((c) => c.disponible);
   const attackers = ready
