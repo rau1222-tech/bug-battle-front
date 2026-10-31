@@ -29,7 +29,7 @@ function cacheProfile(p: Profile) {
   try { localStorage.setItem(CACHE_KEY + p.id, JSON.stringify(p)); } catch {}
 }
 
-function clearCachedProfile(uid: string) {
+export function clearCachedProfile(uid: string) {
   try { localStorage.removeItem(CACHE_KEY + uid); } catch { /* storage unavailable */ }
 }
 

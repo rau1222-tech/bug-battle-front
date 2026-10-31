@@ -3,6 +3,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import type { Profile, ProfileUpdate } from '@/hooks/useProfile';
 import { AVATAR_URL_MAX, DISPLAY_NAME_MAX, validateAvatarUrl, validateDisplayName } from '@/lib/profile';
 import { useI18n } from '@/i18n';
+import { dialogContentClass, inputClass, primaryButtonClass, secondaryButtonClass } from './dialogStyles';
 
 interface EditProfileModalProps {
   open: boolean;
@@ -10,12 +11,10 @@ interface EditProfileModalProps {
   profile: Profile;
   email?: string;
   onSave: (changes: ProfileUpdate) => Promise<unknown>;
+  onDeleteAccount: () => void;
 }
 
-const inputClass =
-  'h-10 w-full px-3 rounded-md bg-[hsl(220,15%,12%)] border border-cyan-500/15 text-cyan-100 text-sm font-body placeholder:text-cyan-300/20 focus:outline-none focus:border-cyan-400/40 transition-all';
-
-export default function EditProfileModal({ open, onOpenChange, profile, email, onSave }: EditProfileModalProps) {
+export default function EditProfileModal({ open, onOpenChange, profile, email, onSave, onDeleteAccount }: EditProfileModalProps) {
   const { t } = useI18n();
   const [name, setName] = useState(profile.display_name);
   const [avatarUrl, setAvatarUrl] = useState(profile.avatar_url ?? '');
@@ -77,11 +76,11 @@ export default function EditProfileModal({ open, onOpenChange, profile, email, o
 
   return (
     <Dialog open={open} onOpenChange={(next) => !saving && onOpenChange(next)}>
-      <DialogContent className="max-w-sm border-cyan-500/20 bg-[hsl(220,20%,8%)] text-cyan-100 shadow-[0_0_40px_-10px_hsl(200,100%,50%,0.25)] [&>button]:text-cyan-300">
+      <DialogContent className={dialogContentClass}>
         <DialogHeader>
-          <DialogTitle className="font-display tracking-wider           text-cyan-100">{t('auth.editTitle')}</DialogTitle>
+          <DialogTitle className="font-display tracking-wider text-cyan-100">{t('auth.editTitle')}</DialogTitle>
           <DialogDescription className="text-[11px] font-body text-cyan-300/40">
-                      {email ?? t('auth.editDescription')}
+            {email ?? t('auth.editDescription')}
           </DialogDescription>
         </DialogHeader>
 
@@ -145,19 +144,31 @@ export default function EditProfileModal({ open, onOpenChange, profile, email, o
               type="button"
               onClick={() => onOpenChange(false)}
               disabled={saving}
-              className="h-10 px-4 rounded-md border border-cyan-500/15 text-cyan-200/60 hover:text-cyan-100 hover:border-cyan-400/30 font-display text-xs tracking-wider transition-colors disabled:opacity-50"
+              className={secondaryButtonClass}
             >
               {t('auth.cancel')}
             </button>
             <button
               type="submit"
               disabled={saving}
-              className="h-10 px-5 rounded-md bg-gradient-to-r from-cyan-600/80 to-blue-600/80 text-white hover:from-cyan-500/90 hover:to-blue-500/90 border border-cyan-400/30 font-display text-xs tracking-wider transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+              className={primaryButtonClass}
             >
               {saving ? t('auth.saving') : t('auth.save')}
             </button>
           </div>
         </form>
+
+        <div className="mt-1 rounded-md border border-red-500/20 bg-red-950/20 px-3 py-2.5 flex items-center justify-between gap-3">
+          <span className="text-[10px] font-display uppercase tracking-widest text-red-300/60">{t('auth.dangerZone')}</span>
+          <button
+            type="button"
+            onClick={() => { onOpenChange(false); onDeleteAccount(); }}
+            disabled={saving}
+            className="px-3 py-1.5 rounded border border-red-500/30 text-red-300/80 hover:text-red-200 hover:bg-red-500/10 font-display text-[10px] tracking-wider uppercase transition-colors disabled:opacity-50"
+          >
+            {t('auth.deleteAccount')}
+          </button>
+        </div>
       </DialogContent>
     </Dialog>
   );

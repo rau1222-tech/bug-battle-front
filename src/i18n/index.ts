@@ -11,11 +11,12 @@ import { gacha } from './messages/gacha';
 import { game } from './messages/game';
 import { home } from './messages/home';
 import { online } from './messages/online';
+import { settings } from './messages/settings';
 
 export type { Language, TranslateParams } from './types';
 
 /** Every key is addressed as `namespace.key`, e.g. t('game.endTurn'). */
-export const NAMESPACES = { auth, cards, common, content, decks, engine, gacha, game, home, online };
+export const NAMESPACES = { auth, cards, common, content, decks, engine, gacha, game, home, online, settings };
 
 export const LANGUAGES: { code: Language; label: string; flag: string; locale: string }[] = [
   { code: 'es', label: 'Español', flag: '🇪🇸', locale: 'es-ES' },

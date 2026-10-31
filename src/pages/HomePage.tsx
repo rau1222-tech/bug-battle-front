@@ -14,7 +14,7 @@ import { cn } from '@/lib/utils';
 export default function HomePage() {
   const navigate = useNavigate();
   const { t } = useI18n();
-  const { user, profile, signOut, updateProfile } = useAuthContext();
+  const { user, profile } = useAuthContext();
   const { decks } = useDecks(user.id);
   const { coins, loading: coinsLoading } = useCollection(user.id);
   const [activeId, setActiveId] = useState<string | null>(null);
@@ -152,12 +152,7 @@ export default function HomePage() {
       </motion.div>
 
       {/* Profile menu - top right */}
-      <ProfileMenu
-        profile={profile}
-        email={user.email}
-        onSignOut={() => { void signOut(); }}
-        onSaveProfile={updateProfile}
-      />
+      <ProfileMenu />
     </div>
   );
 }

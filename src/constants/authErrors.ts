@@ -9,6 +9,10 @@ const AUTH_ERROR_KEYS: Record<string, string> = {
   'signup requires a valid password': 'auth.errors.invalidPassword',
   'email rate limit exceeded': 'auth.errors.rateLimit',
   'for security purposes, you can only request this once every 60 seconds': 'auth.errors.securityWait',
+  'new password should be different from the old password': 'auth.errors.samePassword',
+  'token has expired or is invalid': 'auth.errors.invalidCode',
+  'nonce': 'auth.errors.invalidCode',
+  'reauthentication': 'auth.errors.invalidCode',
 };
 
 const DEFAULT_AUTH_ERROR_KEY = 'auth.errors.generic';

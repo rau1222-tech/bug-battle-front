@@ -11,6 +11,7 @@ import DeckPile from './DeckPile';
 import ActionLog from './ActionLog';
 import boardBg from '@/assets/game-board-bg.png';
 import { useI18n } from '@/i18n';
+import { getSettings } from '@/lib/settings';
 
 interface GameBoardProps {
   onExit: () => void;
@@ -121,7 +122,10 @@ export function GameBoardView({ game, onExit, playerId, playerName: playerNamePr
 
   const playCardAudio = useCallback((audioSrc?: string) => {
     if (!audioSrc) return;
+    const { soundEnabled, volume } = getSettings();
+    if (!soundEnabled || volume === 0) return;
     const audio = new Audio(audioSrc);
+    audio.volume = volume;
     const playPromise = audio.play();
     if (playPromise) {
       void playPromise.catch(() => {

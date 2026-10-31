@@ -59,6 +59,85 @@
     --sidebar-border: 200 30% 20%;
     --sidebar-ring: 200 100% 50%;
   }
+
+  :root,
+  [data-theme='cyan'] {
+    --theme-50: 236 254 255;
+    --theme-100: 207 250 254;
+    --theme-200: 165 243 252;
+    --theme-300: 103 232 249;
+    --theme-400: 34 211 238;
+    --theme-500: 6 182 212;
+    --theme-600: 8 145 178;
+    --theme-700: 14 116 144;
+    --theme-800: 21 94 117;
+    --theme-900: 22 78 99;
+    --theme-950: 8 51 68;
+  }
+
+  [data-theme='lime'] {
+    --theme-50: 247 254 231;
+    --theme-100: 236 252 203;
+    --theme-200: 217 249 157;
+    --theme-300: 190 242 100;
+    --theme-400: 163 230 53;
+    --theme-500: 132 204 22;
+    --theme-600: 101 163 13;
+    --theme-700: 77 124 15;
+    --theme-800: 63 98 18;
+    --theme-900: 54 83 20;
+    --theme-950: 26 46 5;
+    --primary: 84 81% 54%;
+    --ring: 84 81% 54%;
+  }
+
+  [data-theme='violet'] {
+    --theme-50: 245 243 255;
+    --theme-100: 237 233 254;
+    --theme-200: 221 214 254;
+    --theme-300: 196 181 253;
+    --theme-400: 167 139 250;
+    --theme-500: 139 92 246;
+    --theme-600: 124 58 237;
+    --theme-700: 109 40 217;
+    --theme-800: 91 33 182;
+    --theme-900: 76 29 149;
+    --theme-950: 46 16 101;
+    --primary: 255 92% 76%;
+    --ring: 255 92% 76%;
+  }
+
+  [data-theme='amber'] {
+    --theme-50: 255 251 235;
+    --theme-100: 254 243 199;
+    --theme-200: 253 230 138;
+    --theme-300: 252 211 77;
+    --theme-400: 251 191 36;
+    --theme-500: 245 158 11;
+    --theme-600: 217 119 6;
+    --theme-700: 180 83 9;
+    --theme-800: 146 64 14;
+    --theme-900: 120 53 15;
+    --theme-950: 69 26 3;
+    --primary: 43 96% 56%;
+    --ring: 43 96% 56%;
+  }
+
+  [data-theme='rose'] {
+    --theme-50: 255 241 242;
+    --theme-100: 255 228 230;
+    --theme-200: 254 205 211;
+    --theme-300: 253 164 175;
+    --theme-400: 251 113 133;
+    --theme-500: 244 63 94;
+    --theme-600: 225 29 72;
+    --theme-700: 190 18 60;
+    --theme-800: 159 18 57;
+    --theme-900: 136 19 55;
+    --theme-950: 76 5 25;
+    --primary: 351 95% 71%;
+    --ring: 351 95% 71%;
+  }
 }
 
 @layer base {
@@ -73,6 +152,14 @@
 
   h1, h2, h3, h4, h5, h6 {
     font-family: var(--font-display);
+  }
+
+  html[data-reduce-motion='true'] *,
+  html[data-reduce-motion='true'] *::before,
+  html[data-reduce-motion='true'] *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
   }
 }
 

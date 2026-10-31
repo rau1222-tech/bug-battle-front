@@ -18,6 +18,10 @@ export default {
         body: ["Rajdhani", "sans-serif"],
       },
       colors: {
+        // Most UI uses cyan-*; it resolves to the user's accent theme (see index.css [data-theme]).
+        cyan: Object.fromEntries(
+          [50, 100, 200, 300, 400, 500, 600, 700, 800, 900, 950].map((s) => [s, `rgb(var(--theme-${s}) / <alpha-value>)`]),
+        ),
         border: "hsl(var(--border))",
         input: "hsl(var(--input))",
         ring: "hsl(var(--ring))",
