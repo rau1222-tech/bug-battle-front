@@ -280,16 +280,16 @@ Los efectos temporales modifican las estadísticas de las cartas en juego:
 
 ## Sistema Gacha
 
-Sistema de apertura de sobres para reclutar cartas:
+El reclutamiento se hace mediante **banners**: conjuntos de cartas disponibles durante un periodo de tiempo.
 
-- **Coste por sobre**: 100 monedas (monedas iniciales: 300).
-- **Cartas por sobre**: 3.
-- **Rareza** (basada en potencia):
-  - ⚪ Common (potencia 1) — 60% probabilidad
-  - 🔵 Rare (potencia 2) — 30% probabilidad
-  - 🟣 Epic (potencia 3) — 10% probabilidad
-- **Fases**: Tienda → Animación de apertura → Revelación con flip de cartas.
-- La colección y monedas se persisten en `localStorage`.
+- **Disponibilidad**: un banner solo está disponible si `fecha_inicio <= ahora <= fecha_fin`. Se valida en la base de datos (RLS y `open_banner_pack`), no solo en la interfaz.
+- **Coste y cartas por sobre**: configurables por banner (por defecto 100 monedas y 3 cartas; monedas iniciales: 300).
+- **Sorteo**: ponderado por `banner_cards.peso_aparicion` (peso relativo; no hace falta que sumen 100), usando Efraimidis–Spirakis en `public.open_banner_pack()`.
+- **Rareza**: se calcula siempre a partir de `cards.gacha_peso` (≤5 Legendario, ≤10 Épico, ≤30 Raro, resto Común), nunca a partir del peso del banner.
+- **Administración**: los usuarios con `players.admin = true` pueden crear y editar banners desde la pantalla de reclutamiento (`public.save_banner()`, que comprueba `is_admin()`). Al añadir una carta, su peso de aparición se copia de `cards.gacha_peso` y luego se puede cambiar.
+- **Copias máximas por carta**: 2 (igual que el máximo por mazo). Si en un sobre sale una carta de la que ya tienes 2, se convierte automáticamente en oro según su rareza: Común 5 🪙, Rara 10 🪙, Épica 20 🪙, Legendaria 100 🪙. Se calcula en la base de datos (`public.duplicate_gold(gacha_peso)`) y se muestra al revelar la carta.
+- **Fases**: Selección de banner → Animación de apertura → Revelación con flip de cartas.
+- La colección y las monedas se guardan en Supabase (`player_collection`, `players.gold`).
 
 ---
 
@@ -405,8 +405,8 @@ npx playwright test
 | Cap máximo de energía | 10 |
 | Rondas máximas | 3 |
 | Monedas iniciales | 300 |
-| Coste de sobre | 100 |
-| Cartas por sobre | 3 |
+| Coste de sobre | Por banner (100 por defecto) |
+| Cartas por sobre | Por banner (3 por defecto) |
 
 ---
 

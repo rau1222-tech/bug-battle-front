@@ -14,6 +14,72 @@ export type Database = {
   }
   public: {
     Tables: {
+      banner_cards: {
+        Row: {
+          banner_id: string
+          card_id: string
+          peso_aparicion: number
+        }
+        Insert: {
+          banner_id: string
+          card_id: string
+          peso_aparicion: number
+        }
+        Update: {
+          banner_id?: string
+          card_id?: string
+          peso_aparicion?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "banner_cards_banner_id_fkey"
+            columns: ["banner_id"]
+            isOneToOne: false
+            referencedRelation: "banners"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "banner_cards_card_id_fkey"
+            columns: ["card_id"]
+            isOneToOne: false
+            referencedRelation: "cards"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      banners: {
+        Row: {
+          cartas_por_sobre: number
+          coste: number
+          created_at: string
+          fecha_fin: string
+          fecha_inicio: string
+          id: string
+          titulo: string
+          updated_at: string
+        }
+        Insert: {
+          cartas_por_sobre?: number
+          coste?: number
+          created_at?: string
+          fecha_fin: string
+          fecha_inicio: string
+          id?: string
+          titulo: string
+          updated_at?: string
+        }
+        Update: {
+          cartas_por_sobre?: number
+          coste?: number
+          created_at?: string
+          fecha_fin?: string
+          fecha_inicio?: string
+          id?: string
+          titulo?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       card_skills: {
         Row: {
           card_id: string
@@ -453,6 +519,22 @@ export type Database = {
         Args: { p_amount: number; p_user_id: string }
         Returns: number
       }
+
+      open_banner_pack: {
+        Args: { p_banner_id: string }
+        Returns: Json
+      }
+      save_banner: {
+        Args: {
+          p_banner_id: string | null
+          p_cards: Json
+          p_cartas_por_sobre: number
+          p_coste: number
+          p_fecha_fin: string
+          p_fecha_inicio: string
+          p_titulo: string
+        }
+
       finish_match_server: {
         Args: { p_match_id: string; p_winner: string }
         Returns: string
@@ -479,6 +561,7 @@ export type Database = {
       }
       report_match_result: {
         Args: { p_match_id: string; p_winner: string }
+
         Returns: string
       }
       save_deck: {
