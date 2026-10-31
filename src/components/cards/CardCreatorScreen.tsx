@@ -58,8 +58,26 @@ export default function CardCreatorScreen({ onBack }: Props) {
     setHabilidades((current) => current.filter((_, idx) => idx !== index));
   };
 
-  const handleSubmit = async (event: React.FormEvent) => {
+  const resetForm = (form: HTMLFormElement) => {
+    setNombre('');
+    setTipo('programador');
+    setDescripcion('');
+    setCoste(1);
+    setPotencia(1);
+    setAtaqueCoste(1);
+    setCorduraMax(2);
+    setImageMode('url');
+    setImageUrl('');
+    setImageFile(null);
+    setHabilidades([]);
+    // The file input is uncontrolled, so it has to be cleared through the native form reset.
+    form.reset();
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
+    const form = event.currentTarget;
     try {
       await createCard({
         nombre,
@@ -73,8 +91,8 @@ export default function CardCreatorScreen({ onBack }: Props) {
         imageFile: imageMode === 'upload' ? imageFile : null,
         habilidades,
       });
-      toast.success('Carta creada correctamente');
-      onBack();
+      toast.success(`Carta "${nombre.trim()}" creada correctamente`);
+      resetForm(form);
     } catch (error) {
       toast.error(error instanceof Error ? error.message : 'No se pudo crear la carta');
     }
