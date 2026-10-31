@@ -53,6 +53,7 @@ export function useCards() {
           descripcion: row.descripcion ?? '',
           image: row.image_url ?? undefined,
           audio: row.audio_url ?? undefined,
+          gachaPeso: row.gacha_peso,
           habilidades: byCard.get(row.id) ?? [],
         }));
 
