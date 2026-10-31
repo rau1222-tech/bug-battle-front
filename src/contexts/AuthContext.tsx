@@ -8,6 +8,12 @@ export interface AuthContextValue {
   signOut: () => Promise<void>;
 }
 
+/** Passed by AuthGuard to the setup route via <Outlet context>. */
+export interface SetupOutletContext {
+  user: User;
+  createProfile: (displayName: string) => Promise<void>;
+}
+
 export const AuthContext = createContext<AuthContextValue | null>(null);
 
 export function useAuthContext() {

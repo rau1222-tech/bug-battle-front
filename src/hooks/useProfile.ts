@@ -25,116 +25,111 @@ function cacheProfile(p: Profile) {
   try { localStorage.setItem(CACHE_KEY + p.id, JSON.stringify(p)); } catch {}
 }
 
+function clearCachedProfile(uid: string) {
+  try { localStorage.removeItem(CACHE_KEY + uid); } catch { /* storage unavailable */ }
+}
+
+const PROFILE_COLUMNS = 'id, display_name, avatar_url, gold, wins, losses, active_deck_id';
+
+interface ProfileState {
+  /** User id this state was resolved for; null while nothing has been resolved yet. */
+  userId: string | null;
+  profile: Profile | null;
+  error: boolean;
+}
+
+function hasHunterName(profile: Profile | null): profile is Profile {
+  return !!profile?.display_name?.trim();
+}
+
+// Set only by the setup screen, so rows auto-created elsewhere (DB triggers, placeholders) still trigger setup.
+function hasConfirmedHunterName(user: User | null): boolean {
+  return typeof user?.user_metadata?.hunter_name === 'string' && user.user_metadata.hunter_name.trim() !== '';
+}
+
 export function useProfile(user: User | null) {
-  const [profile, setProfile] = useState<Profile | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [needsSetup, setNeedsSetup] = useState(false);
+  const userId = user?.id ?? null;
+  const [state, setState] = useState<ProfileState>({ userId: null, profile: null, error: false });
+  const [reloadKey, setReloadKey] = useState(0);
 
   useEffect(() => {
+    if (!userId) return;
     let cancelled = false;
 
-    if (!user) {
-      setProfile(null);
-      setNeedsSetup(false);
-      setLoading(false);
-      return;
-    }
-
-    setLoading(true);
-
     (async () => {
-      // Try fetching up to 2 times (covers the redirect-back timing issue)
       for (let attempt = 0; attempt < 2; attempt++) {
         const { data, error } = await supabase
           .from('players')
-          .select('id, display_name, avatar_url, gold, wins, losses, active_deck_id')
-          .eq('id', user.id)
-          .single();
+          .select(PROFILE_COLUMNS)
+          .eq('id', userId)
+          .maybeSingle();
 
         if (cancelled) return;
 
-        if (data) {
-          setProfile(data);
-          cacheProfile(data);
-          setNeedsSetup(false);
-          setLoading(false);
+        // The DB is the source of truth: a missing row means the user has no hunter name yet.
+        if (!error) {
+          if (data) cacheProfile(data);
+          else clearCachedProfile(userId);
+          setState({ userId, profile: data, error: false });
           return;
         }
 
-        // If error is not "row not found", retry once after a short delay
-        if (error && error.code !== 'PGRST116' && attempt === 0) {
+        if (attempt === 0) {
           await new Promise((r) => setTimeout(r, 500));
           if (cancelled) return;
-          continue;
         }
-        break;
       }
 
-      // No profile found in DB — check local cache before prompting
-      if (!cancelled) {
-        const cached = getCachedProfile(user.id);
-        if (cached) {
-          setProfile(cached);
-          setNeedsSetup(false);
-        } else {
-          setProfile(null);
-          setNeedsSetup(true);
-        }
-        setLoading(false);
-      }
+      // Network/server error: fall back to cache, never to setup (it would overwrite real data).
+      const cached = getCachedProfile(userId);
+      setState({ userId, profile: cached, error: !cached });
     })();
 
     return () => { cancelled = true; };
-  }, [user?.id]);
+  }, [userId, reloadKey]);
+
+  // Derived from the user id so a stale result from a previous user/null session is never used.
+  const resolved = userId !== null && state.userId === userId;
+  const loading = userId !== null && !resolved;
+  const profile = resolved ? state.profile : null;
+  const error = resolved && state.error;
+  const needsSetup = resolved && !error && (!hasHunterName(profile) || !hasConfirmedHunterName(user));
+
+  const retry = useCallback(() => {
+    setState({ userId: null, profile: null, error: false });
+    setReloadKey((k) => k + 1);
+  }, []);
 
   const createProfile = useCallback(async (displayName: string) => {
-    if (!user) return;
+    if (!user) throw new Error('No authenticated user');
     const meta = user.user_metadata ?? {};
-    const avatarUrl = meta.avatar_url ?? meta.picture ?? null;
+    const avatarUrl: string | null = meta.avatar_url ?? meta.picture ?? null;
 
-    const { data: created, error } = await supabase
+    // Only name/avatar are sent so an existing row keeps its gold/wins/losses (DB defaults apply on insert).
+    const { data, error } = await supabase
       .from('players')
-      .upsert({
-        id: user.id,
-        display_name: displayName,
-        avatar_url: avatarUrl,
-        gold: 300,
-        wins: 0,
-        losses: 0,
-      })
-      .select('id, display_name, avatar_url, gold, wins, losses, active_deck_id')
+      .upsert(
+        { id: user.id, display_name: displayName, ...(avatarUrl ? { avatar_url: avatarUrl } : {}) },
+        { onConflict: 'id' },
+      )
+      .select(PROFILE_COLUMNS)
       .single();
 
-    const final: Profile = created ?? {
-      id: user.id,
-      display_name: displayName,
-      avatar_url: avatarUrl,
-      gold: 300,
-      wins: 0,
-      losses: 0,
-      active_deck_id: null,
-    };
-
-    if (error) {
+    if (error || !data) {
       console.error('Profile upsert failed:', error);
-      const { data: retry } = await supabase
-        .from('players')
-        .select('id, display_name, avatar_url, gold, wins, losses, active_deck_id')
-        .eq('id', user.id)
-        .single();
-      if (retry) {
-        setProfile(retry);
-        cacheProfile(retry);
-      } else {
-        setProfile(final);
-        cacheProfile(final);
-      }
-    } else {
-      setProfile(final);
-      cacheProfile(final);
+      throw error ?? new Error('Profile upsert returned no data');
     }
-    setNeedsSetup(false);
-  }, [user?.id]);
+
+    // Emits USER_UPDATED, so useAuth's user (and thus needsSetup) refreshes with the new metadata.
+    const { error: metaError } = await supabase.auth.updateUser({ data: { hunter_name: displayName } });
+    if (metaError) {
+      console.error('Saving hunter name in user metadata failed:', metaError);
+      throw metaError;
+    }
+
+    cacheProfile(data);
+    setState({ userId: user.id, profile: data, error: false });
+  }, [user]);
 
   const updateName = useCallback(async (newName: string) => {
     if (!user) return;
@@ -142,9 +137,11 @@ export function useProfile(user: User | null) {
       .from('players')
       .update({ display_name: newName })
       .eq('id', user.id);
-    if (!error) setProfile((p) => p ? { ...p, display_name: newName } : p);
+    if (!error) {
+      setState((s) => s.profile ? { ...s, profile: { ...s.profile, display_name: newName } } : s);
+    }
     return error;
-  }, [user?.id]);
+  }, [user]);
 
-  return { profile, loading, needsSetup, createProfile, updateName };
+  return { profile, loading, needsSetup, error, retry, createProfile, updateName };
 }

@@ -1,7 +1,6 @@
 import { Navigate } from 'react-router-dom';
 import AuthScreen from '@/components/auth/AuthScreen';
 import { useAuth } from '@/hooks/useAuth';
-import { useProfile } from '@/hooks/useProfile';
 import { ROUTES } from '@/routes';
 import { translateAuthError } from '@/constants/authErrors';
 
@@ -15,14 +14,14 @@ function LoadingScreen() {
 
 export default function LoginPage() {
   const { user, loading: authLoading, signInWithEmail, signUpWithEmail, signInWithGoogle } = useAuth();
-  const { needsSetup, loading: profileLoading } = useProfile(user);
 
-  if (authLoading || (user && profileLoading)) {
+  if (authLoading) {
     return <LoadingScreen />;
   }
 
+  // AuthGuard decides between setup and the app once the player row is loaded.
   if (user) {
-    return <Navigate to={needsSetup ? ROUTES.SETUP : ROUTES.HOME} replace />;
+    return <Navigate to={ROUTES.HOME} replace />;
   }
 
   return (
