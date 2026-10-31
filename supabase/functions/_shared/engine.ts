@@ -88,6 +88,90 @@ export const SKILL_RULES: Record<number, SkillRule> = {
 
 const RULES_BY_ID = new Map(CARD_RULES.map((c) => [c.id, c]));
 
+// ── Structured, translatable messages ────────────────────────────────
+
+export type MessageParams = Record<string, string | number>;
+
+/**
+ * A log/error message as a template key plus parameters, so clients can render it in any language.
+ * By convention `card`/`target` hold card ids and `skill` holds a skill id.
+ */
+export interface GameMessage {
+  key: string;
+  params?: MessageParams;
+}
+
+/** Spanish templates; used to fill the legacy `message`/`error` strings. */
+export const ENGINE_MESSAGES_ES: Record<string, string> = {
+  start: '🎯 Empieza {name}',
+  roundStart: '🎯 Ronda {round} — empieza {name}',
+  place: '📋 {name} coloca {card} (-{cost}⚡).',
+  attackBug: '⚔️ {card} ({name}) atacó con {dmg}! Bug: {hp}/{max} (-{cost}⚡)',
+  destroyCard: '💥 {card} ({name}) destruyó a {target}! (-{cost}⚡)',
+  damageCard: '🎯 {card} ({name}) dañó a {target}. 🧠 {cordura}/{corduraMax} (-{cost}⚡)',
+  skillDamage: '{icon} {skill} ({name}): {dmg} de daño! Bug: {hp}/{max} (-{cost}⚡)',
+  returnDiscarded: '🔍 {skill} ({name}): {target} se descarta, la mano de {foe} está llena (-{cost}⚡)',
+  returnHand: '🔍 {skill} ({name}): {target} vuelve a la mano de {foe} (-{cost}⚡)',
+  buff: '🤝 {skill} ({name}): {target} +{value} por {turns} turno(s). (-{cost}⚡)',
+  heal: '☕ {skill} ({name}): {target} recupera {value} cordura (-{cost}⚡)',
+  bugKilled: '🎉 {name} eliminó el Bug! +1 punto',
+  turnLimit: '⏱️ Límite de turnos: {winner} gana la ronda por daño ({p1}-{p2})',
+  endTurn: '⏭️ {name} termina su turno — turno de {next} (+{gain}⚡)',
+  endTurnBonus: '⏭️ {name} termina su turno — turno de {next} (+{gain}⚡ con bonus)',
+  endTurnFull: '⏭️ {name} termina su turno — turno de {next} (+{gain}⚡) · mano llena, no roba',
+  endTurnBonusFull: '⏭️ {name} termina su turno — turno de {next} (+{gain}⚡ con bonus) · mano llena, no roba',
+  'error.cannotStartRound': 'No puedes iniciar la ronda',
+  'error.roundOver': 'La ronda ha terminado',
+  'error.notYourTurn': 'No es tu turno',
+  'error.invalidSlot': 'Hueco no válido',
+  'error.slotTaken': '⚠️ Ese hueco ya está ocupado.',
+  'error.invalidCard': 'Carta no válida',
+  'error.needEnergy': '⚠️ Necesitas {cost}⚡ (tienes {energy})',
+  'error.alreadyActed': '⚠️ Esta carta ya actuó este turno.',
+  'error.noPower': 'Esta carta no tiene potencia',
+  'error.needEnergyAttack': '⚠️ Necesitas {cost}⚡ para atacar.',
+  'error.invalidTarget': 'Objetivo no válido',
+  'error.invalidSkill': 'Habilidad no válida',
+  'error.needEnergySkill': '⚠️ Necesitas {cost}⚡ para usar {skill}.',
+  'error.pickOtherAlly': 'Elige otra carta aliada',
+  'error.invalidAction': 'Acción no válida',
+};
+
+export interface MessageFormatter {
+  template: (key: string) => string | undefined;
+  cardName: (id: string) => string;
+  skillName: (id: number) => string;
+}
+
+/** Fills a message template, resolving card/skill ids to display names. */
+export function formatGameMessage(msg: GameMessage, f: MessageFormatter): string {
+  const tpl = f.template(msg.key) ?? msg.key;
+  const params = msg.params ?? {};
+  return tpl.replace(/\{(\w+)\}/g, (whole, name: string) => {
+    const v = params[name];
+    if (v === undefined) return whole;
+    if (name === 'card' || name === 'target') return f.cardName(String(v));
+    if (name === 'skill') return f.skillName(Number(v));
+    return String(v);
+  });
+}
+
+const SPANISH: MessageFormatter = {
+  template: (key) => ENGINE_MESSAGES_ES[key],
+  cardName: (id) => RULES_BY_ID.get(id)?.nombre ?? id,
+  skillName: (id) => SKILL_RULES[id]?.nombre ?? String(id),
+};
+
+const toSpanish = (msg: GameMessage) => formatGameMessage(msg, SPANISH);
+
+type Said = { msg: GameMessage; message: string };
+
+/** Message fields for a state: structured `msg` plus the Spanish `message` fallback. */
+const say = (key: string, params?: MessageParams): Said => {
+  const msg: GameMessage = { key, params };
+  return { msg, message: toSpanish(msg) };
+};
+
 export function potenciaReal(card: EngineCard): number {
   const delta = card.efectosActivos.reduce((acc, e) => (
     e.tipo === 'buff_ataque' ? acc + e.valor : e.tipo === 'debuff_ataque' ? acc - e.valor : acc
@@ -156,7 +240,9 @@ export interface MatchState {
   turn: Side;
   lastAttacker: Side | null;
   isFirstTurn: boolean;
+  /** Spanish rendering of `msg`, kept for older clients. */
   message: string;
+  msg?: GameMessage;
   lastAction: LastAction | null;
   /** Epoch ms when the current turn (or round-end pause) began; set by the server. */
   turnStartedAt: number;
@@ -175,8 +261,9 @@ export type MatchAction =
 
 export interface ApplyResult {
   state: MatchState;
-  /** Set when the action was rejected; state is unchanged. */
+  /** Set when the action was rejected (Spanish text); state is unchanged. */
   error?: string;
+  errorMsg?: GameMessage;
 }
 
 export const other = (side: Side): Side => (side === 'p1' ? 'p2' : 'p1');
@@ -226,7 +313,7 @@ export function initMatch(seed: number, decks: Record<Side, DeckEntry[]>, names:
     turn: first,
     lastAttacker: null,
     isFirstTurn: true,
-    message: `🎯 Empieza ${names[first]}`,
+    ...say('start', { name: names[first] }),
     lastAction: null,
     turnStartedAt: 0,
   };
@@ -236,28 +323,31 @@ function withSide(s: MatchState, side: Side, patch: Partial<SideState>): MatchSt
   return { ...s, sides: { ...s.sides, [side]: { ...s.sides[side], ...patch } } };
 }
 
-function endRound(s: MatchState, winner: Side, message: string): MatchState {
+function endRound(s: MatchState, winner: Side, message: Said): MatchState {
   const score = s.sides[winner].score + 1;
   const over = s.roundNumber >= MAX_ROUNDS || score > MAX_ROUNDS / 2;
   return {
     ...withSide(s, winner, { score }),
     lastAttacker: winner,
     gamePhase: over ? 'game-over' : 'round-end',
-    message,
+    ...message,
   };
 }
 
-function hitBug(s: MatchState, side: Side, damage: number, message: string, countsAsAttack: boolean): MatchState {
+function hitBug(s: MatchState, side: Side, damage: number, message: Said, countsAsAttack: boolean): MatchState {
   const dealt = Math.min(damage, s.bugComplexity);
   const hp = s.bugComplexity - dealt;
   const next = withSide(s, side, { damage: s.sides[side].damage + dealt });
   if (hp > 0) {
-    return { ...next, bugComplexity: hp, lastAttacker: countsAsAttack ? side : s.lastAttacker, message };
+    return { ...next, bugComplexity: hp, lastAttacker: countsAsAttack ? side : s.lastAttacker, ...message };
   }
-  return endRound({ ...next, bugComplexity: 0 }, side, `🎉 ${s.names[side]} eliminó el Bug! +1 punto`);
+  return endRound({ ...next, bugComplexity: 0 }, side, say('bugKilled', { name: s.names[side] }));
 }
 
-const reject = (state: MatchState, error: string): ApplyResult => ({ state, error });
+const reject = (state: MatchState, key: string, params?: MessageParams): ApplyResult => {
+  const errorMsg: GameMessage = { key: `error.${key}`, params };
+  return { state, error: toSpanish(errorMsg), errorMsg };
+};
 
 export function applyAction(s: MatchState, action: MatchAction): ApplyResult {
   const result = applyRules(s, action);
@@ -278,7 +368,7 @@ function applyRules(s: MatchState, action: MatchAction): ApplyResult {
 
   if (action.type === 'NEXT_ROUND') {
     // Either player (or a timeout) may open the next round, so an idle winner can't stall it
-    if (s.gamePhase !== 'round-end') return reject(s, 'No puedes iniciar la ronda');
+    if (s.gamePhase !== 'round-end') return reject(s, 'cannotStartRound');
     const round = s.roundNumber + 1;
     const starter = other(s.lastAttacker ?? s.roundStarter);
     const dealt = dealRound(s.seed, round, s.decks);
@@ -297,21 +387,21 @@ function applyRules(s: MatchState, action: MatchAction): ApplyResult {
         turn: starter,
         lastAttacker: null,
         isFirstTurn: true,
-        message: `🎯 Ronda ${round} — empieza ${s.names[starter]}`,
+        ...say('roundStart', { round, name: s.names[starter] }),
       },
     };
   }
 
-  if (s.gamePhase !== 'playing') return reject(s, 'La ronda ha terminado');
-  if (s.turn !== side) return reject(s, 'No es tu turno');
+  if (s.gamePhase !== 'playing') return reject(s, 'roundOver');
+  if (s.turn !== side) return reject(s, 'notYourTurn');
 
   switch (action.type) {
     case 'PLACE_CARD': {
-      if (action.slot < 0 || action.slot >= TABLE_MAX) return reject(s, 'Hueco no válido');
-      if (me.table[action.slot] !== null) return reject(s, '⚠️ Ese hueco ya está ocupado.');
+      if (action.slot < 0 || action.slot >= TABLE_MAX) return reject(s, 'invalidSlot');
+      if (me.table[action.slot] !== null) return reject(s, 'slotTaken');
       const card = me.hand.find((c) => c.instanceId === action.cardId);
-      if (!card || card.definition.tipo === 'consumible') return reject(s, 'Carta no válida');
-      if (me.energy < card.definition.coste) return reject(s, `⚠️ Necesitas ${card.definition.coste}⚡ (tienes ${me.energy})`);
+      if (!card || card.definition.tipo === 'consumible') return reject(s, 'invalidCard');
+      if (me.energy < card.definition.coste) return reject(s, 'needEnergy', { cost: card.definition.coste, energy: me.energy });
       const table = [...me.table];
       table[action.slot] = card;
       return {
@@ -321,34 +411,34 @@ function applyRules(s: MatchState, action: MatchAction): ApplyResult {
             table,
             energy: me.energy - card.definition.coste,
           }),
-          message: `📋 ${name} coloca ${card.definition.nombre} (-${card.definition.coste}⚡).`,
+          ...say('place', { name, card: card.definition.id, cost: card.definition.coste }),
         },
       };
     }
 
     case 'ATTACK_BUG': {
       const card = me.table.find((c) => c?.instanceId === action.cardId);
-      if (!card || card.definition.tipo !== 'programador') return reject(s, 'Carta no válida');
-      if (!card.disponible) return reject(s, '⚠️ Esta carta ya actuó este turno.');
+      if (!card || card.definition.tipo !== 'programador') return reject(s, 'invalidCard');
+      if (!card.disponible) return reject(s, 'alreadyActed');
       const dmg = potenciaReal(card);
-      if (dmg === 0) return reject(s, 'Esta carta no tiene potencia');
+      if (dmg === 0) return reject(s, 'noPower');
       const cost = card.definition.ataqueCoste ?? 0;
-      if (me.energy < cost) return reject(s, `⚠️ Necesitas ${cost}⚡ para atacar.`);
+      if (me.energy < cost) return reject(s, 'needEnergyAttack', { cost });
       const next = withSide(s, side, { table: markUsed(me.table, card.instanceId), energy: me.energy - cost });
       const hp = Math.max(0, s.bugComplexity - dmg);
-      return { state: hitBug(next, side, dmg, `⚔️ ${card.definition.nombre} (${name}) atacó con ${dmg}! Bug: ${hp}/${BUG_MAX_COMPLEXITY} (-${cost}⚡)`, true) };
+      return { state: hitBug(next, side, dmg, say('attackBug', { card: card.definition.id, name, dmg, hp, max: BUG_MAX_COMPLEXITY, cost }), true) };
     }
 
     case 'ATTACK_CARD': {
       const attacker = me.table.find((c) => c?.instanceId === action.attackerId);
-      if (!attacker || attacker.definition.tipo !== 'qa') return reject(s, 'Carta no válida');
-      if (!attacker.disponible) return reject(s, '⚠️ Esta carta ya actuó este turno.');
+      if (!attacker || attacker.definition.tipo !== 'qa') return reject(s, 'invalidCard');
+      if (!attacker.disponible) return reject(s, 'alreadyActed');
       const dmg = potenciaReal(attacker);
-      if (dmg === 0) return reject(s, 'Esta carta no tiene potencia');
+      if (dmg === 0) return reject(s, 'noPower');
       const cost = attacker.definition.ataqueCoste ?? 0;
-      if (me.energy < cost) return reject(s, `⚠️ Necesitas ${cost}⚡ para atacar.`);
+      if (me.energy < cost) return reject(s, 'needEnergyAttack', { cost });
       const idx = them.table.findIndex((c) => c?.instanceId === action.targetId);
-      if (idx < 0) return reject(s, 'Objetivo no válido');
+      if (idx < 0) return reject(s, 'invalidTarget');
       const target = them.table[idx]!;
       const cordura = target.cordura - dmg;
       const foeTable = [...them.table];
@@ -361,9 +451,9 @@ function applyRules(s: MatchState, action: MatchAction): ApplyResult {
       return {
         state: {
           ...next,
-          message: cordura <= 0
-            ? `💥 ${attacker.definition.nombre} (${name}) destruyó a ${target.definition.nombre}! (-${cost}⚡)`
-            : `🎯 ${attacker.definition.nombre} (${name}) dañó a ${target.definition.nombre}. 🧠 ${cordura}/${target.definition.corduraMax} (-${cost}⚡)`,
+          ...(cordura <= 0
+            ? say('destroyCard', { card: attacker.definition.id, name, target: target.definition.id, cost })
+            : say('damageCard', { card: attacker.definition.id, name, target: target.definition.id, cordura, corduraMax: target.definition.corduraMax ?? 0, cost })),
         },
       };
     }
@@ -374,15 +464,15 @@ function applyRules(s: MatchState, action: MatchAction): ApplyResult {
       const card = fromHand
         ? me.hand.find((c) => c.instanceId === action.cardId)
         : me.table.find((c) => c?.instanceId === action.cardId) ?? undefined;
-      if (!card) return reject(s, 'Carta no válida');
-      if (fromHand && card.definition.tipo !== 'consumible') return reject(s, 'Carta no válida');
-      if (!fromHand && !card.disponible) return reject(s, '⚠️ Esta carta ya actuó este turno.');
+      if (!card) return reject(s, 'invalidCard');
+      if (fromHand && card.definition.tipo !== 'consumible') return reject(s, 'invalidCard');
+      if (!fromHand && !card.disponible) return reject(s, 'alreadyActed');
       const tuple = card.definition.habilidades[action.type === 'USE_SKILL' ? action.skillIndex : 0];
-      if (!tuple) return reject(s, 'Habilidad no válida');
+      if (!tuple) return reject(s, 'invalidSkill');
       const [skillId, potencia, coste, duracion] = tuple;
       const skill = SKILL_RULES[skillId];
-      if (!skill) return reject(s, 'Habilidad no válida');
-      if (me.energy < coste) return reject(s, `⚠️ Necesitas ${coste}⚡ para usar ${skill.nombre}.`);
+      if (!skill) return reject(s, 'invalidSkill');
+      if (me.energy < coste) return reject(s, 'needEnergySkill', { cost: coste, skill: skillId });
 
       const paid = withSide(s, side, fromHand
         ? { hand: me.hand.filter((c) => c.instanceId !== card.instanceId), energy: me.energy - coste }
@@ -392,14 +482,14 @@ function applyRules(s: MatchState, action: MatchAction): ApplyResult {
 
       switch (skill.accionTipo) {
         case 'DANIO_DIRECTO': {
-          if (skill.objetivo !== 'bug') return reject(s, 'Habilidad no válida');
+          if (skill.objetivo !== 'bug') return reject(s, 'invalidSkill');
           const hp = Math.max(0, s.bugComplexity - potencia);
-          return { state: hitBug(paid, side, potencia, `${icon} ${skill.nombre} (${name}): ${potencia} de daño! Bug: ${hp}/${BUG_MAX_COMPLEXITY} (-${coste}⚡)`, false) };
+          return { state: hitBug(paid, side, potencia, say('skillDamage', { icon, skill: skillId, name, dmg: potencia, hp, max: BUG_MAX_COMPLEXITY, cost: coste }), false) };
         }
         case 'DEVOLVER_MANO': {
-          if (skill.objetivo !== 'carta_enemiga' || !targetId) return reject(s, 'Objetivo no válido');
+          if (skill.objetivo !== 'carta_enemiga' || !targetId) return reject(s, 'invalidTarget');
           const idx = them.table.findIndex((c) => c?.instanceId === targetId);
-          if (idx < 0) return reject(s, 'Objetivo no válido');
+          if (idx < 0) return reject(s, 'invalidTarget');
           const target = them.table[idx]!;
           const foeTable = [...them.table];
           foeTable[idx] = null;
@@ -408,38 +498,36 @@ function applyRules(s: MatchState, action: MatchAction): ApplyResult {
           return {
             state: {
               ...withSide(paid, foe, { table: foeTable, hand: handFull ? them.hand : [...them.hand, fresh] }),
-              message: handFull
-                ? `🔍 ${skill.nombre} (${name}): ${target.definition.nombre} se descarta, la mano de ${s.names[foe]} está llena (-${coste}⚡)`
-                : `🔍 ${skill.nombre} (${name}): ${target.definition.nombre} vuelve a la mano de ${s.names[foe]} (-${coste}⚡)`,
+              ...say(handFull ? 'returnDiscarded' : 'returnHand', { skill: skillId, name, target: target.definition.id, foe: s.names[foe], cost: coste }),
             },
           };
         }
         case 'APLICAR_ESTADO':
         case 'CURAR_CORDURA': {
-          if (skill.objetivo !== 'carta_aliada' || !targetId) return reject(s, 'Objetivo no válido');
-          if (!fromHand && targetId === card.instanceId) return reject(s, 'Elige otra carta aliada');
+          if (skill.objetivo !== 'carta_aliada' || !targetId) return reject(s, 'invalidTarget');
+          if (!fromHand && targetId === card.instanceId) return reject(s, 'pickOtherAlly');
           const myTable = paid.sides[side].table;
           const idx = myTable.findIndex((c) => c?.instanceId === targetId);
-          if (idx < 0) return reject(s, 'Objetivo no válido');
+          if (idx < 0) return reject(s, 'invalidTarget');
           const target = myTable[idx]!;
           let updated: EngineCard;
-          let message: string;
+          let message: Said;
           if (skill.accionTipo === 'APLICAR_ESTADO') {
-            if (!skill.efectoTipo) return reject(s, 'Habilidad no válida');
+            if (!skill.efectoTipo) return reject(s, 'invalidSkill');
             const efecto: Effect = { tipo: skill.efectoTipo, valor: potencia, turnosRestantes: duracion || 1 };
             updated = { ...target, efectosActivos: [...target.efectosActivos, efecto] };
-            message = `🤝 ${skill.nombre} (${name}): ${target.definition.nombre} +${potencia} por ${duracion || 1} turno(s). (-${coste}⚡)`;
+            message = say('buff', { skill: skillId, name, target: target.definition.id, value: potencia, turns: duracion || 1, cost: coste });
           } else {
             const cordura = Math.min(target.definition.corduraMax ?? 0, target.cordura + potencia);
             updated = { ...target, cordura };
-            message = `☕ ${skill.nombre} (${name}): ${target.definition.nombre} recupera ${potencia} cordura (-${coste}⚡)`;
+            message = say('heal', { skill: skillId, name, target: target.definition.id, value: potencia, cost: coste });
           }
           const table = [...myTable];
           table[idx] = updated;
-          return { state: { ...withSide(paid, side, { table }), message } };
+          return { state: { ...withSide(paid, side, { table }), ...message } };
         }
         default:
-          return reject(s, 'Habilidad no válida');
+          return reject(s, 'invalidSkill');
       }
     }
 
@@ -457,7 +545,7 @@ function applyRules(s: MatchState, action: MatchAction): ApplyResult {
           state: endRound(
             { ...state, roundTurns, isFirstTurn: false },
             winner,
-            `⏱️ Límite de turnos: ${s.names[winner]} gana la ronda por daño (${dmg.p1}-${dmg.p2})`,
+            say('turnLimit', { winner: s.names[winner], p1: dmg.p1, p2: dmg.p2 }),
           ),
         };
       }
@@ -482,12 +570,12 @@ function applyRules(s: MatchState, action: MatchAction): ApplyResult {
           isFirstTurn: false,
           // The last-hit bonus is paid once
           lastAttacker: bonus ? null : s.lastAttacker,
-          message: `⏭️ ${name} termina su turno — turno de ${s.names[next]} (+${gain}⚡${bonus ? ' con bonus' : ''})${handFull ? ' · mano llena, no roba' : ''}`,
+          ...say(`endTurn${bonus ? 'Bonus' : ''}${handFull ? 'Full' : ''}`, { name, next: s.names[next], gain }),
         },
       };
     }
   }
-  return reject(s, 'Acción no válida');
+  return reject(s, 'invalidAction');
 }
 
 export function replay(initial: MatchState, actions: MatchAction[]): MatchState {
@@ -526,6 +614,7 @@ export interface MatchView {
   lastAttacker: Side | null;
   isFirstTurn: boolean;
   message: string;
+  msg?: GameMessage;
   lastAction: LastAction | null;
   turnStartedAt: number;
 }
@@ -557,6 +646,7 @@ export function redactFor(s: MatchState, viewer: Side): MatchView {
     lastAttacker: s.lastAttacker,
     isFirstTurn: s.isFirstTurn,
     message: s.message,
+    msg: s.msg,
     lastAction: s.lastAction,
     turnStartedAt: s.turnStartedAt,
   };

@@ -10,6 +10,7 @@ import ActionMenu from './ActionMenu';
 import DeckPile from './DeckPile';
 import ActionLog from './ActionLog';
 import boardBg from '@/assets/game-board-bg.png';
+import { useI18n } from '@/i18n';
 
 interface GameBoardProps {
   onExit: () => void;
@@ -48,7 +49,9 @@ interface GameBoardViewProps {
   banner?: ReactNode;
 }
 
-export function GameBoardView({ game, onExit, playerId, playerName = 'Jugador', opponentName, online = false, banner }: GameBoardViewProps) {
+export function GameBoardView({ game, onExit, playerId, playerName: playerNameProp, opponentName, online = false, banner }: GameBoardViewProps) {
+  const { t, skillName, skillDescription } = useI18n();
+  const playerName = playerNameProp ?? t('game.defaultPlayerName');
   const { recordResult } = useGameStats(playerId);
   const isPlayerTurn = game.turn === 'player';
   /** Input is ignored while an online action is in flight */
@@ -148,7 +151,7 @@ export function GameBoardView({ game, onExit, playerId, playerName = 'Jugador', 
   const getActionsForCard = () => {
     if (!selectedCard) return [];
     if (!selectedCard.disponible) {
-      return [{ id: 'unavailable', label: 'Ya actuó este turno', description: 'Esta carta no puede actuar más en este turno' }];
+      return [{ id: 'unavailable', label: t('game.action.unavailable'), description: t('game.action.unavailableDesc') }];
     }
     const actions: { id: string; label: string; description: string }[] = [];
     const def = selectedCard.definition;
@@ -160,8 +163,8 @@ export function GameBoardView({ game, onExit, playerId, playerName = 'Jugador', 
       if (def.tipo === 'programador') {
         actions.push({
           id: 'attack-bug',
-          label: `⚔️ Atacar Bug (-${power}❤️, -${attackCost}⚡)`,
-          description: hasEnergy ? 'Reduce la complejidad del Bug.' : `⚠️ Necesitas ${attackCost}⚡`,
+          label: t('game.action.attackBug', { power, cost: attackCost }),
+          description: hasEnergy ? t('game.action.attackBugDesc') : t('game.action.needEnergy', { cost: attackCost }),
         });
       }
       if (def.tipo === 'qa') {
@@ -169,8 +172,8 @@ export function GameBoardView({ game, onExit, playerId, playerName = 'Jugador', 
         if (hasEnemies) {
           actions.push({
             id: 'attack-enemy',
-            label: `🎯 Atacar Carta Enemiga (-${power}🧠, -${attackCost}⚡)`,
-            description: hasEnergy ? 'Reduce la cordura de una carta rival; a 0 queda destruida.' : `⚠️ Necesitas ${attackCost}⚡`,
+            label: t('game.action.attackEnemy', { power, cost: attackCost }),
+            description: hasEnergy ? t('game.action.attackEnemyDesc') : t('game.action.needEnergy', { cost: attackCost }),
           });
         }
       }
@@ -190,8 +193,8 @@ export function GameBoardView({ game, onExit, playerId, playerName = 'Jugador', 
       const canAfford = game.playerEnergy >= coste;
       actions.push({
         id: `skill-${skillId}-${idx}`,
-        label: `✨ ${skill.nombre} (Pot: ${potencia}, -${coste}⚡)`,
-        description: canAfford ? skill.descripcion : `⚠️ Necesitas ${coste}⚡`,
+        label: t('game.action.skill', { name: skillName(skill), power: potencia, cost: coste }),
+        description: canAfford ? skillDescription(skill) : t('game.action.needEnergy', { cost: coste }),
       });
     });
     return actions;
@@ -409,7 +412,7 @@ export function GameBoardView({ game, onExit, playerId, playerName = 'Jugador', 
           onClick={() => setShowExitConfirm(true)}
           className="text-[10px] sm:text-sm font-display text-amber-200/70 hover:text-amber-100 transition-colors bg-black/30 backdrop-blur-sm px-2 sm:px-3 py-1 sm:py-1.5 rounded-lg border border-amber-900/30 shrink-0"
         >
-          ← SALIR
+          {t('game.exit')}
         </button>
 
         {/* Turn indicator */}
@@ -429,9 +432,9 @@ export function GameBoardView({ game, onExit, playerId, playerName = 'Jugador', 
               || selection.type === 'consumable-picking-ally'
               || selection.type === 'consumable-picking-enemy'
               || draggingConsumableTarget !== null)
-              ? '🎯 OBJETIVO'
+              ? t('game.target')
               : `🟢 ${playerName.toUpperCase()}`
-            : `🔴 ${opponentName ? opponentName.toUpperCase() : 'RIVAL'}`}
+            : `🔴 ${opponentName ? opponentName.toUpperCase() : t('game.rivalUpper')}`}
           {secondsLeft !== null && game.gamePhase === 'playing' && (
             <span className={`ml-2 tabular-nums ${secondsLeft <= 15 ? 'text-red-300 animate-pulse' : 'opacity-70'}`}>⏱{secondsLeft}s</span>
           )}
@@ -439,8 +442,8 @@ export function GameBoardView({ game, onExit, playerId, playerName = 'Jugador', 
 
         <div className="flex items-center gap-1.5 sm:gap-4 text-[11px] sm:text-base font-display bg-black/30 backdrop-blur-sm px-2 sm:px-4 py-1 sm:py-1.5 rounded-lg border border-amber-900/30 shrink-0">
           <span className="text-emerald-400">{game.playerScore}</span>
-          <span className="text-amber-200/50 text-[9px] sm:text-xs" title="Ronda · turnos de la ronda (al límite gana quien más daño haya hecho)">
-            R{game.roundNumber} · T{game.roundTurns}/{MAX_ROUND_TURNS}
+          <span className="text-amber-200/50 text-[9px] sm:text-xs"           title={t('game.roundTooltip')}>
+                      {t('game.roundCounter', { round: game.roundNumber, turns: game.roundTurns, max: MAX_ROUND_TURNS })}
           </span>
           <span className="text-red-400">{game.botScore}</span>
         </div>
@@ -469,7 +472,7 @@ export function GameBoardView({ game, onExit, playerId, playerName = 'Jugador', 
         </motion.div>
         {/* Bot energy */}
         <div className="flex items-center gap-1.5 sm:gap-2">
-          <span className="text-[9px] sm:text-xs font-display text-red-300/80 drop-shadow-sm">{opponentName ?? 'BOT'}</span>
+          <span className="text-[9px] sm:text-xs font-display text-red-300/80 drop-shadow-sm">{opponentName ?? t('game.botUpper')}</span>
           <div className="relative w-10 h-10 sm:w-14 sm:h-14 flex items-center justify-center rounded-lg border-2 border-red-400/70 bg-gradient-to-b from-red-900/80 to-red-950/90 shadow-[0_0_18px_rgba(239,68,68,0.25),inset_0_1px_0_rgba(255,255,255,0.1)] backdrop-blur-sm">
             <span className="absolute -top-1.5 sm:-top-2 left-1/2 -translate-x-1/2 text-xs sm:text-sm">⚡</span>
             <span className="text-lg sm:text-2xl font-display font-black text-red-300 tabular-nums drop-shadow-[0_0_8px_rgba(239,68,68,0.5)]">
@@ -499,20 +502,20 @@ export function GameBoardView({ game, onExit, playerId, playerName = 'Jugador', 
           >
             <span className="text-[9px] sm:text-xs font-body text-amber-100/90 bg-black/50 backdrop-blur-sm px-2 sm:px-4 py-1 sm:py-1.5 rounded-full border border-amber-500/40 whitespace-nowrap">
               {draggingConsumableTarget === 'bug'
-                ? '🧪 Suelta sobre el Bug'
+                ? t('game.hint.dropBug')
                 : draggingConsumableTarget === 'carta_aliada'
-                  ? '🧪 Suelta sobre una carta aliada'
+                  ? t('game.hint.dropAlly')
                   : draggingConsumableTarget === 'carta_enemiga'
-                    ? '🧪 Suelta sobre una carta rival'
+                    ? t('game.hint.dropEnemy')
                     : selection.type === 'consumable-picking-ally'
-                      ? '🧪 Elige una carta aliada para usar el consumible'
+                      ? t('game.hint.consumableAlly')
                       : selection.type === 'consumable-picking-enemy'
-                        ? '🧪 Elige una carta rival para usar el consumible'
+                        ? t('game.hint.consumableEnemy')
                     : selection.type === 'picking-ally'
-                ? '👆 Elige carta aliada para aplicar el efecto'
+                ? t('game.hint.skillAlly')
                 : selection.type === 'picking-enemy' && selection.actionType === 'attack-enemy'
-                  ? '👆 Elige carta rival para atacar'
-                  : '👆 Elige carta rival para aplicar la habilidad'}
+                  ? t('game.hint.attackEnemy')
+                  : t('game.hint.skillEnemy')}
             </span>
           </motion.div>
         )}
@@ -527,7 +530,7 @@ export function GameBoardView({ game, onExit, playerId, playerName = 'Jugador', 
 
       {/* ===== DECK ===== */}
       <div className="absolute left-[1%] sm:left-[4%] top-[35%] -translate-y-1/2 z-10 flex flex-col items-center gap-3 sm:gap-8">
-        <DeckPile count={game.botDeckCount} label={opponentName ?? 'BOT'} />
+        <DeckPile count={game.botDeckCount} label={opponentName ?? t('game.botUpper')} />
         <DeckPile count={game.playerDeckCount} label={playerName} />
       </div>
 
@@ -549,8 +552,8 @@ export function GameBoardView({ game, onExit, playerId, playerName = 'Jugador', 
             transition-all flex flex-col items-center gap-0.5 sm:gap-1 leading-tight"
         >
           <span className="text-base sm:text-2xl">⏭️</span>
-          <span>SALTAR</span>
-          <span>TURNO</span>
+          <span>{t('game.skipTurnLine1')}</span>
+          <span>{t('game.skipTurnLine2')}</span>
         </motion.button>
       )}
 
@@ -562,7 +565,7 @@ export function GameBoardView({ game, onExit, playerId, playerName = 'Jugador', 
         {/* BOT TABLE — slot-based */}
         <div className="flex-1 flex flex-col justify-end pb-2">
           <div className="text-[10px] font-display text-amber-200/30 uppercase tracking-[0.3em] mb-2 text-center">
-            {opponentName ?? 'Bot'}
+            {opponentName ?? t('game.bot')}
           </div>
           <div className={`flex items-end justify-center gap-1 sm:gap-3 min-h-[5rem] sm:min-h-[7rem] md:min-h-[10rem] px-1 sm:px-4 transition-all duration-300 ${
             selection.type === 'picking-enemy'
@@ -738,7 +741,7 @@ export function GameBoardView({ game, onExit, playerId, playerName = 'Jugador', 
             transition={{ type: 'spring', stiffness: 300, damping: 15 }}
             className="flex items-center gap-1.5 bg-black/50 backdrop-blur-sm px-2.5 py-1 rounded-full border border-amber-900/40"
           >
-            <span className="text-[9px] sm:text-[10px] font-display text-amber-200/50 uppercase tracking-wider">Rival</span>
+            <span className="text-[9px] sm:text-[10px] font-display text-amber-200/50 uppercase tracking-wider">{t('game.rival')}</span>
             <span className="text-xs sm:text-sm font-display text-amber-100 font-bold tabular-nums">×{game.botHandCount}</span>
           </motion.div>
         </div>
@@ -748,7 +751,7 @@ export function GameBoardView({ game, onExit, playerId, playerName = 'Jugador', 
       <div className="absolute bottom-0 left-0 right-0 z-15 h-[22%]">
         <div className="w-full h-full flex flex-col items-center justify-center">
           <div className="text-[8px] sm:text-[10px] font-display text-amber-200/40 uppercase tracking-[0.2em] sm:tracking-[0.3em] mb-1 sm:mb-2 px-2 text-center">
-            {playerName} ({game.playerHand.length}) — arrastra cartas a mesa o consumibles a su objetivo
+            {t('game.handHint', { name: playerName, count: game.playerHand.length })}
           </div>
           <div className="flex items-center justify-center gap-1 sm:gap-2 px-2 sm:px-8">
             <AnimatePresence>
@@ -803,7 +806,7 @@ export function GameBoardView({ game, onExit, playerId, playerName = 'Jugador', 
               })}
             </AnimatePresence>
             {game.playerHand.length === 0 && (
-              <span className="text-amber-200/20 text-xs font-display">Sin cartas en mano</span>
+              <span className="text-amber-200/20 text-xs font-display">{t('game.emptyHand')}</span>
             )}
           </div>
         </div>
@@ -855,12 +858,12 @@ export function GameBoardView({ game, onExit, playerId, playerName = 'Jugador', 
                     {game.playerScore > game.botScore ? '🏆' : game.playerScore < game.botScore ? '💀' : '🤝'}
                   </div>
                   <h2 className="text-4xl font-display font-bold text-amber-100 mb-3">
-                    {game.playerScore > game.botScore ? '¡VICTORIA!' : game.playerScore < game.botScore ? 'DERROTA' : 'EMPATE'}
+                    {game.playerScore > game.botScore ? t('game.victory') : game.playerScore < game.botScore ? t('game.defeat') : t('game.draw')}
                   </h2>
                   <p className="text-xl text-amber-200/60 font-body">{game.playerScore} - {game.botScore}</p>
                   {reward !== null && (
                     <p className="mt-3 text-lg font-display text-yellow-300">
-                      {reward > 0 ? `+${reward} 🪙` : online ? '' : 'Límite diario de oro contra el bot alcanzado'}
+                      {reward > 0 ? `+${reward} 🪙` : online ? '' : t('game.dailyGoldLimit')}
                     </p>
                   )}
                 </>
@@ -868,7 +871,7 @@ export function GameBoardView({ game, onExit, playerId, playerName = 'Jugador', 
                 <>
                   <div className="text-6xl mb-4">{game.lastAttacker === 'player' ? '✅' : '❌'}</div>
                   <h2 className="text-3xl font-display font-bold text-amber-100 mb-3">
-                    {game.lastAttacker === 'player' ? `¡Punto para ${playerName}!` : opponentName ? `Punto para ${opponentName}` : 'Punto para el Bot'}
+                    {game.lastAttacker === 'player' ? t('game.pointForPlayer', { name: playerName }) : opponentName ? t('game.pointForOpponent', { name: opponentName }) : t('game.pointForBot')}
                   </h2>
                   <p className="text-xl text-amber-200/60 font-body">{game.playerScore} - {game.botScore}</p>
                 </>
@@ -881,7 +884,7 @@ export function GameBoardView({ game, onExit, playerId, playerName = 'Jugador', 
                 disabled={game.busy}
                 className="h-14 px-10 font-display text-base tracking-wide rounded-lg bg-amber-700/80 text-amber-100 hover:bg-amber-600/80 border border-amber-500/30 shadow-[0_0_20px_hsl(35_60%_30%/0.3)] transition-all disabled:opacity-60"
               >
-                {game.gamePhase === 'game-over' ? 'NUEVA PARTIDA' : 'SIGUIENTE RONDA'}
+                {game.gamePhase === 'game-over' ? t('game.newMatch') : t('game.nextRound')}
                 {game.gamePhase === 'round-end' && secondsLeft !== null && ` (${secondsLeft}s)`}
               </button>
               )}
@@ -890,7 +893,7 @@ export function GameBoardView({ game, onExit, playerId, playerName = 'Jugador', 
                   onClick={onExit}
                   className="font-display text-amber-200/50 hover:text-amber-200/80 text-sm transition-colors"
                 >
-                  VOLVER AL MENÚ
+                  {t('game.backToMenu')}
                 </button>
               )}
             </div>
@@ -918,23 +921,23 @@ export function GameBoardView({ game, onExit, playerId, playerName = 'Jugador', 
             >
               <span className="text-3xl">🚪</span>
               <h2 className="text-lg sm:text-xl font-display text-amber-100 text-center tracking-wide">
-                ¿Abandonar la partida?
+                {t('game.leave.title')}
               </h2>
               <p className="text-sm font-body text-amber-200/60 text-center">
-                {online ? 'Si sales ahora, la partida contará como derrota.' : 'Perderás el progreso de esta partida.'}
+                {online ? t('game.leave.online') : t('game.leave.offline')}
               </p>
               <div className="flex gap-3 w-full">
                 <button
                   onClick={() => setShowExitConfirm(false)}
                   className="flex-1 h-11 font-display text-sm tracking-wide rounded-lg bg-stone-800/80 text-amber-200/80 hover:bg-stone-700/80 border border-amber-900/30 transition-colors"
                 >
-                  SEGUIR
+                  {t('game.leave.stay')}
                 </button>
                 <button
                   onClick={onExit}
                   className="flex-1 h-11 font-display text-sm tracking-wide rounded-lg bg-red-900/60 text-red-100 hover:bg-red-800/70 border border-red-700/40 transition-colors"
                 >
-                  SALIR
+                  {t('game.leave.confirm')}
                 </button>
               </div>
             </motion.div>

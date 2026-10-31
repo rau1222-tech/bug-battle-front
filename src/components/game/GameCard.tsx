@@ -1,6 +1,7 @@
 import { motion } from 'framer-motion';
 import { CardInstance, DEFAULT_CARD_IMAGE, calcularPotenciaReal, resolveCardImage } from '@/constants';
 import cardBase from '@/assets/Base-Carta.png';
+import { useI18n } from '@/i18n';
 
 interface GameCardProps {
   card: CardInstance;
@@ -13,6 +14,7 @@ interface GameCardProps {
 }
 
 export default function GameCard({ card, isOpponent = false, index = 0, disabled = false, selected = false, onSelect, inHand = false }: GameCardProps) {
+  const { cardName, cardDescription } = useI18n();
   const { definition } = card;
   const isProgramador = definition.tipo === 'programador';
 
@@ -80,7 +82,7 @@ export default function GameCard({ card, isOpponent = false, index = 0, disabled
         <span className={`text-[4px] sm:text-[5.5px] md:text-[7px] font-display font-bold tracking-wide text-center leading-none px-1 ${
           definition.tipo === 'consumible' ? 'text-cyan-700' : isProgramador ? 'text-stone-900' : 'text-red-600'
         }`}>
-          {definition.nombre.toUpperCase()}
+          {cardName(definition).toUpperCase()}
         </span>
       </div>
 
@@ -88,7 +90,7 @@ export default function GameCard({ card, isOpponent = false, index = 0, disabled
       <div className="absolute top-[13%] left-[8%] right-[8%] bottom-[45%] flex items-center justify-center pointer-events-none">
         <img
           src={resolveCardImage(definition.image)}
-          alt={definition.nombre}
+          alt={cardName(definition)}
           className="w-full h-full object-contain rounded-sm"
           onError={(event) => {
             const img = event.currentTarget;
@@ -103,7 +105,7 @@ export default function GameCard({ card, isOpponent = false, index = 0, disabled
       {/* BOTTOM: Ability */}
       <div className="absolute top-[59%] left-[10%] right-[10%] bottom-[14%] flex items-center justify-center p-1 pointer-events-none overflow-hidden">
         <p className="text-[3.5px] sm:text-[4.5px] md:text-[5.5px] font-body text-stone-600 text-center leading-tight">
-          {definition.descripcion}
+          {cardDescription(definition)}
         </p>
       </div>
 

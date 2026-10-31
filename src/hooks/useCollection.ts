@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import type { CardTemplate } from '@/constants';
 import { supabase } from '@/integrations/supabase/client';
+import { t } from '@/i18n';
 
 /** card_id → total copies owned */
 export type Collection = Record<string, number>;
@@ -48,12 +49,15 @@ export const RARITY_COLORS: Record<Rarity, string> = {
   legendario: 'text-yellow-300 border-yellow-400/60',
 };
 
-export const RARITY_LABELS: Record<Rarity, string> = {
-  comun: 'Común',
-  raro: 'Raro',
-  epico: 'Épico',
-  legendario: 'Legendario',
-};
+const RARITIES: Rarity[] = ['comun', 'raro', 'epico', 'legendario'];
+
+/** Translated on every read so labels follow the current language. */
+export const RARITY_LABELS = Object.defineProperties(
+  {} as Record<Rarity, string>,
+  Object.fromEntries(
+    RARITIES.map((r) => [r, { enumerable: true, get: () => t(`common.rarity.${r}`) }]),
+  ),
+) as Readonly<Record<Rarity, string>>;
 
 export const RARITY_GLOW: Record<Rarity, string> = {
   comun: '',
@@ -104,7 +108,7 @@ export function useCollection(userId: string | null | undefined) {
         }
       } catch (err) {
         console.error('Failed to load collection:', err);
-        if (!cancelled) setError(err instanceof Error ? err.message : 'No se pudo cargar la colección');
+        if (!cancelled) setError(err instanceof Error ? err.message : t('decks.collectionLoadError'));
       } finally {
         if (!cancelled) setLoading(false);
       }

@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import type { CardTemplate } from '@/constants';
-import { getRarity, RARITY_COLORS, RARITY_LABELS } from '@/hooks/useCollection';
+import { getRarity, RARITY_COLORS } from '@/hooks/useCollection';
+import { useI18n } from '@/i18n';
 import {
   appearanceProbabilities,
   BANNER_CARDS_PER_PACK_MAX,
@@ -33,6 +34,7 @@ const inputClass =
 const labelClass = 'text-[10px] font-display uppercase tracking-widest text-purple-300/50';
 
 export default function BannerEditorModal({ open, onOpenChange, banner, cards, onSave }: BannerEditorModalProps) {
+  const { t, cardName, cardNameById } = useI18n();
   const [titulo, setTitulo] = useState('');
   const [inicio, setInicio] = useState('');
   const [fin, setFin] = useState('');
@@ -111,7 +113,7 @@ export default function BannerEditorModal({ open, onOpenChange, banner, cards, o
       await onSave(draft);
       onOpenChange(false);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'No se pudo guardar el banner');
+      setError(err instanceof Error ? err.message : t('gacha.editor.saveError'));
     } finally {
       setSaving(false);
     }
@@ -122,16 +124,16 @@ export default function BannerEditorModal({ open, onOpenChange, banner, cards, o
       <DialogContent className="max-w-2xl max-h-[90dvh] overflow-y-auto border-purple-500/20 bg-[hsl(220,20%,8%)] text-purple-100 shadow-[0_0_40px_-10px_hsl(260,80%,60%,0.25)] [&>button]:text-purple-300">
         <DialogHeader>
           <DialogTitle className="font-display tracking-wider text-purple-100">
-            {banner ? 'Editar banner' : 'Nuevo banner'}
+            {banner ? t('gacha.editor.editTitle') : t('gacha.editor.newTitle')}
           </DialogTitle>
           <DialogDescription className="text-[11px] font-body text-purple-300/40">
-            El peso de aparición solo afecta al sorteo dentro de este banner. La rareza sigue dependiendo del peso de la carta.
+            {t('gacha.editor.description')}
           </DialogDescription>
         </DialogHeader>
 
         <form onSubmit={handleSubmit} className="flex flex-col gap-4">
           <label className="flex flex-col gap-1">
-            <span className={labelClass}>Título</span>
+            <span className={labelClass}>{t('gacha.editor.title')}</span>
             <input
               type="text"
               value={titulo}
@@ -145,18 +147,18 @@ export default function BannerEditorModal({ open, onOpenChange, banner, cards, o
 
           <div className="grid sm:grid-cols-2 gap-3">
             <label className="flex flex-col gap-1">
-              <span className={labelClass}>Fecha de inicio</span>
+              <span className={labelClass}>{t('gacha.editor.startDate')}</span>
               <input type="datetime-local" value={inicio} onChange={(e) => setInicio(e.target.value)} required className={inputClass} />
             </label>
             <label className="flex flex-col gap-1">
-              <span className={labelClass}>Fecha de fin</span>
+              <span className={labelClass}>{t('gacha.editor.endDate')}</span>
               <input type="datetime-local" value={fin} onChange={(e) => setFin(e.target.value)} required className={inputClass} />
             </label>
           </div>
 
           <div className="grid grid-cols-2 gap-3">
             <label className="flex flex-col gap-1">
-              <span className={labelClass}>Coste por sobre (🪙)</span>
+              <span className={labelClass}>{t('gacha.editor.costPerPack')}</span>
               <input
                 type="number"
                 min={1}
@@ -167,7 +169,7 @@ export default function BannerEditorModal({ open, onOpenChange, banner, cards, o
               />
             </label>
             <label className="flex flex-col gap-1">
-              <span className={labelClass}>Cartas por sobre</span>
+              <span className={labelClass}>{t('gacha.editor.cardsPerPack')}</span>
               <input
                 type="number"
                 min={BANNER_CARDS_PER_PACK_MIN}
@@ -181,19 +183,19 @@ export default function BannerEditorModal({ open, onOpenChange, banner, cards, o
           </div>
 
           <div className="flex flex-col gap-2">
-            <span className={labelClass}>Cartas del banner ({entries.length})</span>
+            <span className={labelClass}>{t('gacha.editor.bannerCards', { count: entries.length })}</span>
 
             <div className="flex gap-2">
               <select
                 value={cardToAdd}
                 onChange={(e) => setCardToAdd(e.target.value)}
                 className={`${inputClass} flex-1`}
-                aria-label="Carta a añadir"
+                aria-label={t('gacha.editor.cardToAdd')}
               >
-                <option value="">Selecciona una carta…</option>
+                <option value="">{t('gacha.editor.selectCard')}</option>
                 {availableCards.map((c) => (
                   <option key={c.id} value={c.id}>
-                    {c.nombre} — {RARITY_LABELS[getRarity(c)]} (peso {c.gachaPeso ?? 1})
+                    {t('gacha.editor.cardOption', { name: cardName(c), rarity: t(`common.rarity.${getRarity(c)}`), weight: c.gachaPeso ?? 1 })}
                   </option>
                 ))}
               </select>
@@ -203,30 +205,31 @@ export default function BannerEditorModal({ open, onOpenChange, banner, cards, o
                 disabled={!cardToAdd}
                 className="h-10 px-4 rounded-md bg-purple-600/40 border border-purple-500/30 text-purple-100 font-display text-xs tracking-wider hover:bg-purple-600/60 disabled:opacity-40 disabled:cursor-not-allowed"
               >
-                AÑADIR
+                {t('gacha.editor.add')}
               </button>
             </div>
 
             {entries.length === 0 ? (
-              <p className="text-xs font-body text-purple-300/40">Añade al menos una carta al banner.</p>
+              <p className="text-xs font-body text-purple-300/40">{t('gacha.editor.empty')}</p>
             ) : (
               <div className="rounded-md border border-purple-500/15 divide-y divide-purple-500/10">
                 <div className="grid grid-cols-[1fr_5.5rem_4rem_2rem] gap-2 px-3 py-1.5 text-[9px] font-display uppercase tracking-widest text-purple-300/40">
-                  <span>Carta</span>
-                  <span>Peso aparición</span>
-                  <span className="text-right">Prob.</span>
+                  <span>{t('gacha.editor.colCard')}</span>
+                  <span>{t('gacha.editor.colWeight')}</span>
+                  <span className="text-right">{t('gacha.editor.colProb')}</span>
                   <span />
                 </div>
                 {entries.map((entry) => {
                   const card = cardsById.get(entry.cardId);
                   const rarity = card ? getRarity(card) : 'comun';
+                  const name = card ? cardName(card) : cardNameById(entry.cardId);
                   const invalid = !Number.isInteger(entry.pesoAparicion) || entry.pesoAparicion <= 0;
                   return (
                     <div key={entry.cardId} className="grid grid-cols-[1fr_5.5rem_4rem_2rem] gap-2 items-center px-3 py-2">
                       <div className="min-w-0">
-                        <p className="text-xs font-display truncate">{card?.nombre ?? entry.cardId}</p>
+                        <p className="text-xs font-display truncate">{name}</p>
                         <p className={`text-[9px] font-body ${RARITY_COLORS[rarity].split(' ')[0]}`}>
-                          {RARITY_LABELS[rarity]} · peso carta {card?.gachaPeso ?? '—'}
+                          {t('gacha.editor.cardWeight', { rarity: t(`common.rarity.${rarity}`), weight: card?.gachaPeso ?? '—' })}
                         </p>
                       </div>
                       <input
@@ -235,7 +238,7 @@ export default function BannerEditorModal({ open, onOpenChange, banner, cards, o
                         step={1}
                         value={entry.pesoAparicion || ''}
                         onChange={(e) => updateWeight(entry.cardId, e.target.value)}
-                        aria-label={`Peso de aparición de ${card?.nombre ?? entry.cardId}`}
+                        aria-label={t('gacha.editor.weightAria', { name })}
                         className={`${inputClass} h-8 px-2 ${invalid ? 'border-red-500/60' : ''}`}
                       />
                       <span className="text-right text-xs font-display tabular-nums text-purple-200/70">
@@ -244,7 +247,7 @@ export default function BannerEditorModal({ open, onOpenChange, banner, cards, o
                       <button
                         type="button"
                         onClick={() => removeCard(entry.cardId)}
-                        aria-label={`Quitar ${card?.nombre ?? entry.cardId}`}
+                        aria-label={t('gacha.editor.removeAria', { name })}
                         className="h-8 w-8 rounded-md text-red-300/70 hover:text-red-200 hover:bg-red-500/10 transition-colors"
                       >
                         ✕
@@ -265,14 +268,14 @@ export default function BannerEditorModal({ open, onOpenChange, banner, cards, o
               disabled={saving}
               className="h-10 px-4 rounded-md border border-purple-500/15 text-purple-200/60 hover:text-purple-100 hover:border-purple-400/30 font-display text-xs tracking-wider transition-colors disabled:opacity-50"
             >
-              CANCELAR
+              {t('gacha.editor.cancel')}
             </button>
             <button
               type="submit"
               disabled={saving}
               className="h-10 px-5 rounded-md bg-gradient-to-r from-purple-600/80 to-indigo-600/80 text-white hover:from-purple-500/90 hover:to-indigo-500/90 border border-purple-400/30 font-display text-xs tracking-wider transition-all disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              {saving ? 'GUARDANDO...' : 'GUARDAR'}
+              {saving ? t('gacha.editor.saving') : t('gacha.editor.save')}
             </button>
           </div>
         </form>

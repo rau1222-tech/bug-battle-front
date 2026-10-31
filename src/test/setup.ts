@@ -1,4 +1,8 @@
 import "@testing-library/jest-dom";
+import { setLanguage } from "@/i18n";
+
+// Tests assert Spanish copy regardless of the machine's locale
+setLanguage("es");
 
 Object.defineProperty(window, "matchMedia", {
   writable: true,

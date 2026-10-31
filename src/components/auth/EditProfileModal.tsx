@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import type { Profile, ProfileUpdate } from '@/hooks/useProfile';
 import { AVATAR_URL_MAX, DISPLAY_NAME_MAX, validateAvatarUrl, validateDisplayName } from '@/lib/profile';
+import { useI18n } from '@/i18n';
 
 interface EditProfileModalProps {
   open: boolean;
@@ -15,6 +16,7 @@ const inputClass =
   'h-10 w-full px-3 rounded-md bg-[hsl(220,15%,12%)] border border-cyan-500/15 text-cyan-100 text-sm font-body placeholder:text-cyan-300/20 focus:outline-none focus:border-cyan-400/40 transition-all';
 
 export default function EditProfileModal({ open, onOpenChange, profile, email, onSave }: EditProfileModalProps) {
+  const { t } = useI18n();
   const [name, setName] = useState(profile.display_name);
   const [avatarUrl, setAvatarUrl] = useState(profile.avatar_url ?? '');
   const [previewFailed, setPreviewFailed] = useState(false);
@@ -47,7 +49,7 @@ export default function EditProfileModal({ open, onOpenChange, profile, email, o
       return;
     }
     if (trimmedUrl && previewFailed) {
-      setError('No se pudo cargar la imagen de esa URL');
+      setError(t('auth.imageLoadError'));
       return;
     }
 
@@ -67,7 +69,7 @@ export default function EditProfileModal({ open, onOpenChange, profile, email, o
       await onSave(changes);
       onOpenChange(false);
     } catch {
-      setError('Error al guardar. Inténtalo de nuevo.');
+      setError(t('auth.saveError'));
     } finally {
       setSaving(false);
     }
@@ -77,9 +79,9 @@ export default function EditProfileModal({ open, onOpenChange, profile, email, o
     <Dialog open={open} onOpenChange={(next) => !saving && onOpenChange(next)}>
       <DialogContent className="max-w-sm border-cyan-500/20 bg-[hsl(220,20%,8%)] text-cyan-100 shadow-[0_0_40px_-10px_hsl(200,100%,50%,0.25)] [&>button]:text-cyan-300">
         <DialogHeader>
-          <DialogTitle className="font-display tracking-wider text-cyan-100">Editar perfil</DialogTitle>
+          <DialogTitle className="font-display tracking-wider           text-cyan-100">{t('auth.editTitle')}</DialogTitle>
           <DialogDescription className="text-[11px] font-body text-cyan-300/40">
-            {email ?? 'Cambia tu nombre de jugador y tu imagen de perfil'}
+                      {email ?? t('auth.editDescription')}
           </DialogDescription>
         </DialogHeader>
 
@@ -88,7 +90,7 @@ export default function EditProfileModal({ open, onOpenChange, profile, email, o
             {showPreview ? (
               <img
                 src={trimmedUrl}
-                alt="Vista previa del avatar"
+                alt={t('auth.avatarPreviewAlt')}
                 className="w-20 h-20 rounded-full object-cover border-2 border-cyan-400/30"
                 referrerPolicy="no-referrer"
                 onLoad={() => setPreviewFailed(false)}
@@ -102,7 +104,7 @@ export default function EditProfileModal({ open, onOpenChange, profile, email, o
           </div>
 
           <label className="flex flex-col gap-1">
-            <span className="text-[10px] font-display uppercase tracking-widest text-cyan-300/50">Nombre de usuario</span>
+            <span className="text-[10px] font-display uppercase tracking-widest text-cyan-300/50">{t('auth.usernameLabel')}</span>
             <input
               type="text"
               value={name}
@@ -114,7 +116,7 @@ export default function EditProfileModal({ open, onOpenChange, profile, email, o
           </label>
 
           <label className="flex flex-col gap-1">
-            <span className="text-[10px] font-display uppercase tracking-widest text-cyan-300/50">URL de la imagen de perfil</span>
+            <span className="text-[10px] font-display uppercase tracking-widest text-cyan-300/50">{t('auth.avatarUrlLabel')}</span>
             <input
               type="url"
               inputMode="url"
@@ -128,11 +130,11 @@ export default function EditProfileModal({ open, onOpenChange, profile, email, o
               className={inputClass}
             />
             <span className="text-[10px] font-body text-cyan-300/30">
-              Pega el enlace a una imagen de internet. Déjalo vacío para usar tus iniciales.
+              {t('auth.avatarUrlHint')}
             </span>
             {trimmedUrl && urlError && <span className="text-[11px] font-body text-red-400">{urlError}</span>}
             {trimmedUrl && !urlError && previewFailed && (
-              <span className="text-[11px] font-body text-red-400">No se pudo cargar la imagen de esa URL</span>
+              <span className="text-[11px] font-body text-red-400">{t('auth.imageLoadError')}</span>
             )}
           </label>
 
@@ -145,14 +147,14 @@ export default function EditProfileModal({ open, onOpenChange, profile, email, o
               disabled={saving}
               className="h-10 px-4 rounded-md border border-cyan-500/15 text-cyan-200/60 hover:text-cyan-100 hover:border-cyan-400/30 font-display text-xs tracking-wider transition-colors disabled:opacity-50"
             >
-              CANCELAR
+              {t('auth.cancel')}
             </button>
             <button
               type="submit"
               disabled={saving}
               className="h-10 px-5 rounded-md bg-gradient-to-r from-cyan-600/80 to-blue-600/80 text-white hover:from-cyan-500/90 hover:to-blue-500/90 border border-cyan-400/30 font-display text-xs tracking-wider transition-all disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              {saving ? 'GUARDANDO...' : 'GUARDAR'}
+              {saving ? t('auth.saving') : t('auth.save')}
             </button>
           </div>
         </form>

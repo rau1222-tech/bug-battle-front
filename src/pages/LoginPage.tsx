@@ -3,11 +3,13 @@ import AuthScreen from '@/components/auth/AuthScreen';
 import { useAuth } from '@/hooks/useAuth';
 import { ROUTES } from '@/routes';
 import { translateAuthError } from '@/constants/authErrors';
+import { useI18n } from '@/i18n';
 
 function LoadingScreen() {
+  const { t } = useI18n();
   return (
     <div className="h-[100dvh] flex items-center justify-center bg-[hsl(220,20%,6%)] bg-grid-pattern">
-      <div className="text-cyan-300/50 font-display text-sm animate-pulse tracking-wider">Cargando...</div>
+      <div className="text-cyan-300/50 font-display text-sm animate-pulse tracking-wider">{t('common.loading')}</div>
     </div>
   );
 }

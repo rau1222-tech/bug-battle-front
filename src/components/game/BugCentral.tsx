@@ -2,6 +2,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { BugState } from '@/hooks/useGameLogic';
 import { BUG_MAX_COMPLEXITY } from '@/constants';
 import { useRef, useEffect } from 'react';
+import { useI18n } from '@/i18n';
 
 interface BugCentralProps {
   complexity: number;
@@ -10,6 +11,7 @@ interface BugCentralProps {
 }
 
 export default function BugCentral({ complexity, bugState, id }: BugCentralProps) {
+  const { t } = useI18n();
   const hpPercent = (complexity / BUG_MAX_COMPLEXITY) * 100;
   const explosionRef = useRef<HTMLVideoElement>(null);
 
@@ -84,7 +86,7 @@ export default function BugCentral({ complexity, bugState, id }: BugCentralProps
         />
       </div>
       <span className="text-[9px] sm:text-[11px] md:text-xs font-display text-amber-200/50 tracking-wider">
-        COMPLEJIDAD {complexity}/{BUG_MAX_COMPLEXITY}
+        {t('game.complexity', { current: complexity, max: BUG_MAX_COMPLEXITY })}
       </span>
     </div>
   );

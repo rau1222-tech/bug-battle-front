@@ -102,7 +102,7 @@ function stampTurnClock(prev: MatchState, next: MatchState): MatchState {
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
-  if (req.method !== 'POST') return json({ error: 'Método no permitido' }, 405);
+  if (req.method !== 'POST') return json({ error: 'Método no permitido', errorMsg: { key: 'server.methodNotAllowed' } }, 405);
 
   try {
     const admin = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!, {
@@ -112,11 +112,11 @@ Deno.serve(async (req) => {
     const token = (req.headers.get('Authorization') ?? '').replace(/^Bearer\s+/i, '');
     const { data: auth } = await admin.auth.getUser(token);
     const user = auth?.user;
-    if (!user) return json({ error: 'No autenticado' }, 401);
+    if (!user) return json({ error: 'No autenticado', errorMsg: { key: 'server.unauthenticated' } }, 401);
 
     const body = await req.json().catch(() => null) as { op?: string; matchId?: string; action?: unknown } | null;
     const matchId = body?.matchId ?? '';
-    if (!UUID_RE.test(matchId)) return json({ error: 'Partida no encontrada' }, 404);
+    if (!UUID_RE.test(matchId)) return json({ error: 'Partida no encontrada', errorMsg: { key: 'server.notFound' } }, 404);
 
     const { data: match, error: mErr } = await admin
       .from('matches')
@@ -125,7 +125,7 @@ Deno.serve(async (req) => {
       .maybeSingle<MatchRow>();
     if (mErr) throw mErr;
     if (!match || (match.host_id !== user.id && match.guest_id !== user.id)) {
-      return json({ error: 'Partida no encontrada' }, 404);
+      return json({ error: 'Partida no encontrada', errorMsg: { key: 'server.notFound' } }, 404);
     }
     const side: Side = match.host_id === user.id ? 'p1' : 'p2';
 
@@ -143,7 +143,7 @@ Deno.serve(async (req) => {
     let playerAction: MatchAction | null = null;
     if (op === 'action') {
       playerAction = parseAction(body.action, side);
-      if (!playerAction) return json({ status: match.status, error: 'Acción no válida', view: redactFor(row.state, side), version: row.version });
+      if (!playerAction) return json({ status: match.status, error: 'Acción no válida', errorMsg: { key: 'error.invalidAction' }, view: redactFor(row.state, side), version: row.version });
     }
 
     for (let attempt = 0; attempt < 3; attempt++) {
@@ -152,7 +152,7 @@ Deno.serve(async (req) => {
 
       const result = applyAction(row.state, action);
       if (result.error) {
-        return json({ status: match.status, error: result.error, view: redactFor(row.state, side), version: row.version });
+        return json({ status: match.status, error: result.error, errorMsg: result.errorMsg, view: redactFor(row.state, side), version: row.version });
       }
 
       const idle = op === 'timeout' && action.type === 'END_TURN' ? action.side : null;
@@ -186,9 +186,9 @@ Deno.serve(async (req) => {
       // Lost an optimistic-concurrency race: reload and retry
       row = (await loadState(admin, match.id))!;
     }
-    return json({ status: match.status, error: 'La partida está ocupada, inténtalo de nuevo', view: redactFor(row.state, side), version: row.version });
+    return json({ status: match.status, error: 'La partida está ocupada, inténtalo de nuevo', errorMsg: { key: 'server.busy' }, view: redactFor(row.state, side), version: row.version });
   } catch (e) {
     console.error(e);
-    return json({ error: 'Error interno del servidor' }, 500);
+    return json({ error: 'Error interno del servidor', errorMsg: { key: 'server.internal' } }, 500);
   }
 });

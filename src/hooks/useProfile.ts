@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import type { User } from '@supabase/supabase-js';
+import { t } from '@/i18n';
 
 export interface Profile {
   id: string;
@@ -135,7 +136,7 @@ export function useProfile(user: User | null) {
   }, [user]);
 
   const updateProfile = useCallback(async (changes: ProfileUpdate) => {
-    if (!user) throw new Error('No hay sesión activa');
+    if (!user) throw new Error(t('auth.errors.noSession'));
     const { data, error } = await supabase
       .from('players')
       .update(changes)

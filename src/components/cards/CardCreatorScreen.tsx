@@ -4,6 +4,7 @@ import BackButton from '@/components/ui/BackButton';
 import { useCards } from '@/hooks/useCards';
 import { useCardCreate, type SkillConfigInput } from '@/hooks/useCardCreate';
 import { RARITY_COLORS, RARITY_GACHA_WEIGHT, RARITY_LABELS, type Rarity } from '@/hooks/useCollection';
+import { useI18n } from '@/i18n';
 import type { CardTemplate, CardType } from '@/constants';
 import CardPreview from './CardPreview';
 import SkillConfigurator from './SkillConfigurator';
@@ -21,6 +22,7 @@ const EMPTY_SKILL: SkillConfigInput = {
 };
 
 export default function CardCreatorScreen({ onBack }: Props) {
+  const { t, cardType } = useI18n();
   const { skills } = useCards();
   const { createCard, creating } = useCardCreate();
 
@@ -96,10 +98,10 @@ export default function CardCreatorScreen({ onBack }: Props) {
         imageFile: imageMode === 'upload' ? imageFile : null,
         habilidades,
       });
-      toast.success(`Carta "${nombre.trim()}" creada correctamente`);
+      toast.success(t('cards.created', { name: nombre.trim() }));
       resetForm(form);
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : 'No se pudo crear la carta');
+      toast.error(error instanceof Error ? error.message : t('cards.createError'));
     }
   };
 
@@ -112,7 +114,7 @@ export default function CardCreatorScreen({ onBack }: Props) {
         <div className="flex items-center justify-between mb-3 gap-2">
           <BackButton onClick={onBack} color="cyan" />
           <h1 className="font-display text-sm sm:text-lg text-cyan-100 tracking-wider text-glow-blue">
-            🧪 CREAR CARTA
+            {t('cards.title')}
           </h1>
           <div className="w-20" />
         </div>
@@ -121,55 +123,55 @@ export default function CardCreatorScreen({ onBack }: Props) {
           <form onSubmit={handleSubmit} className="rounded-lg border border-cyan-500/20 bg-[hsl(220,20%,8%)]/90 backdrop-blur-md p-4 space-y-4">
             <div className="grid sm:grid-cols-3 gap-3">
               <div>
-                <label className="block text-xs font-body text-cyan-200/80 mb-1">Nombre</label>
+                <label className="block text-xs font-body text-cyan-200/80 mb-1">{t('cards.name')}</label>
                 <input
                   value={nombre}
                   onChange={(e) => setNombre(e.target.value)}
                   className="w-full h-10 rounded bg-[hsl(220,15%,12%)] border border-cyan-800/30 px-3 text-sm text-cyan-100"
-                  placeholder="Nombre de la carta"
+                  placeholder={t('cards.namePlaceholder')}
                 />
               </div>
 
               <div>
-                <label className="block text-xs font-body text-cyan-200/80 mb-1">Tipo</label>
+                <label className="block text-xs font-body text-cyan-200/80 mb-1">{t('cards.type')}</label>
                 <select
                   value={tipo}
                   onChange={(e) => setTipo(e.target.value as CardType)}
                   className="w-full h-10 rounded bg-[hsl(220,15%,12%)] border border-cyan-800/30 px-3 text-sm text-cyan-100"
                 >
-                  <option value="programador">Programador</option>
-                  <option value="qa">QA</option>
-                  <option value="consumible">Consumible</option>
+                  <option value="programador">{cardType('programador')}</option>
+                  <option value="qa">{cardType('qa')}</option>
+                  <option value="consumible">{cardType('consumible')}</option>
                 </select>
               </div>
 
               <div>
-                <label className="block text-xs font-body text-cyan-200/80 mb-1">Rareza</label>
+                <label className="block text-xs font-body text-cyan-200/80 mb-1">{t('cards.rarity')}</label>
                 <select
                   value={rareza}
                   onChange={(e) => setRareza(e.target.value as Rarity)}
                   className="w-full h-10 rounded bg-[hsl(220,15%,12%)] border border-cyan-800/30 px-3 text-sm text-cyan-100"
                 >
                   {(Object.keys(RARITY_LABELS) as Rarity[]).map((r) => (
-                    <option key={r} value={r}>{RARITY_LABELS[r]}</option>
+                    <option key={r} value={r}>{t(`common.rarity.${r}`)}</option>
                   ))}
                 </select>
               </div>
             </div>
 
             <div>
-              <label className="block text-xs font-body text-cyan-200/80 mb-1">Descripción</label>
+              <label className="block text-xs font-body text-cyan-200/80 mb-1">{t('cards.description')}</label>
               <textarea
                 value={descripcion}
                 onChange={(e) => setDescripcion(e.target.value)}
                 className="w-full min-h-20 rounded bg-[hsl(220,15%,12%)] border border-cyan-800/30 px-3 py-2 text-sm text-cyan-100"
-                placeholder="Descripción de la carta"
+                placeholder={t('cards.descriptionPlaceholder')}
               />
             </div>
 
             <div className="grid sm:grid-cols-4 gap-3">
               <div>
-                <label className="block text-xs font-body text-cyan-200/80 mb-1">Coste</label>
+                <label className="block text-xs font-body text-cyan-200/80 mb-1">{t('cards.cost')}</label>
                 <input
                   type="number"
                   min={0}
@@ -179,7 +181,7 @@ export default function CardCreatorScreen({ onBack }: Props) {
                 />
               </div>
               <div>
-                <label className="block text-xs font-body text-cyan-200/80 mb-1">Potencia</label>
+                <label className="block text-xs font-body text-cyan-200/80 mb-1">{t('cards.power')}</label>
                 <input
                   type="number"
                   min={0}
@@ -190,7 +192,7 @@ export default function CardCreatorScreen({ onBack }: Props) {
                 />
               </div>
               <div>
-                <label className="block text-xs font-body text-cyan-200/80 mb-1">Ataque coste</label>
+                <label className="block text-xs font-body text-cyan-200/80 mb-1">{t('cards.attackCost')}</label>
                 <input
                   type="number"
                   min={0}
@@ -201,7 +203,7 @@ export default function CardCreatorScreen({ onBack }: Props) {
                 />
               </div>
               <div>
-                <label className="block text-xs font-body text-cyan-200/80 mb-1">Cordura máx</label>
+                <label className="block text-xs font-body text-cyan-200/80 mb-1">{t('cards.maxSanity')}</label>
                 <input
                   type="number"
                   min={0}
@@ -227,13 +229,13 @@ export default function CardCreatorScreen({ onBack }: Props) {
                   onClick={() => setImageMode('upload')}
                   className={`px-2 py-1 rounded text-[10px] font-display tracking-wider border ${imageMode === 'upload' ? 'bg-cyan-500/30 border-cyan-400/40 text-cyan-100' : 'bg-[hsl(220,15%,12%)] border-cyan-800/30 text-cyan-300/70'}`}
                 >
-                  Upload
+                  {t('cards.upload')}
                 </button>
               </div>
 
               {imageMode === 'url' ? (
                 <div>
-                  <label className="block text-xs font-body text-cyan-200/80 mb-1">Imagen (URL)</label>
+                  <label className="block text-xs font-body text-cyan-200/80 mb-1">{t('cards.imageUrl')}</label>
                   <input
                     value={imageUrl}
                     onChange={(e) => setImageUrl(e.target.value)}
@@ -243,7 +245,7 @@ export default function CardCreatorScreen({ onBack }: Props) {
                 </div>
               ) : (
                 <div>
-                  <label className="block text-xs font-body text-cyan-200/80 mb-1">Imagen (archivo)</label>
+                  <label className="block text-xs font-body text-cyan-200/80 mb-1">{t('cards.imageFile')}</label>
                   <input
                     type="file"
                     accept="image/*"
@@ -256,18 +258,18 @@ export default function CardCreatorScreen({ onBack }: Props) {
 
             <div className="space-y-2">
               <div className="flex items-center justify-between gap-2">
-                <h2 className="text-xs font-display tracking-wider text-cyan-100">Habilidades</h2>
+                <h2 className="text-xs font-display tracking-wider text-cyan-100">{t('cards.skills')}</h2>
                 <button
                   type="button"
                   onClick={() => setHabilidades((current) => [...current, { ...EMPTY_SKILL }])}
                   className="px-2.5 py-1.5 rounded bg-cyan-600/30 border border-cyan-500/30 text-[10px] font-display tracking-wider text-cyan-100 hover:bg-cyan-600/40"
                 >
-                  Añadir habilidad
+                  {t('cards.addSkill')}
                 </button>
               </div>
 
               {habilidades.length === 0 ? (
-                <p className="text-xs text-cyan-300/50">No hay habilidades agregadas.</p>
+                <p className="text-xs text-cyan-300/50">{t('cards.noSkills')}</p>
               ) : (
                 <div className="space-y-2">
                   {habilidades.map((skill, index) => (
@@ -289,15 +291,15 @@ export default function CardCreatorScreen({ onBack }: Props) {
               disabled={creating}
               className="w-full h-11 rounded-md bg-cyan-600/70 hover:bg-cyan-500/80 text-cyan-50 font-display text-xs tracking-[0.15em] border border-cyan-400/30 disabled:opacity-40"
             >
-              {creating ? 'CREANDO...' : 'CREAR CARTA'}
+              {creating ? t('cards.creating') : t('cards.create')}
             </button>
           </form>
 
           <div className="rounded-lg border border-cyan-500/20 bg-[hsl(220,20%,8%)]/90 backdrop-blur-md p-4">
-            <h2 className="text-xs font-display tracking-wider text-cyan-100 mb-3">Preview</h2>
+            <h2 className="text-xs font-display tracking-wider text-cyan-100 mb-3">{t('cards.preview')}</h2>
             <CardPreview card={preview} />
             <p className={`mt-3 mx-auto w-fit px-2 py-0.5 rounded border text-[10px] font-display tracking-wider ${RARITY_COLORS[rareza]}`}>
-              {RARITY_LABELS[rareza]}
+              {t(`common.rarity.${rareza}`)}
             </p>
           </div>
         </div>

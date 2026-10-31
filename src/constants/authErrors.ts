@@ -1,29 +1,38 @@
-const AUTH_ERROR_MESSAGES: Record<string, string> = {
-  'invalid login credentials': 'Correo o contraseña incorrectos',
-  'email not confirmed': 'Debes confirmar tu email antes de iniciar sesión',
-  'user already registered': 'Ya existe una cuenta con este correo',
-  'password should be at least 6 characters': 'La contraseña debe tener al menos 6 caracteres',
-  'unable to validate email address: invalid format': 'El formato del correo electrónico no es válido',
-  'signup requires a valid password': 'Debes introducir una contraseña válida',
-  'email rate limit exceeded': 'Demasiados intentos. Espera unos minutos',
-  'for security purposes, you can only request this once every 60 seconds': 'Por seguridad, solo puedes hacer esto una vez cada 60 segundos',
+import { LANGUAGES, t, translate } from '@/i18n';
+
+const AUTH_ERROR_KEYS: Record<string, string> = {
+  'invalid login credentials': 'auth.errors.invalidCredentials',
+  'email not confirmed': 'auth.errors.emailNotConfirmed',
+  'user already registered': 'auth.errors.userExists',
+  'password should be at least 6 characters': 'auth.errors.passwordTooShort',
+  'unable to validate email address: invalid format': 'auth.errors.invalidEmail',
+  'signup requires a valid password': 'auth.errors.invalidPassword',
+  'email rate limit exceeded': 'auth.errors.rateLimit',
+  'for security purposes, you can only request this once every 60 seconds': 'auth.errors.securityWait',
 };
 
-const AUTH_ERROR_VALUES = new Set(Object.values(AUTH_ERROR_MESSAGES));
-const DEFAULT_AUTH_ERROR = 'Ha ocurrido un error. Inténtalo de nuevo.';
+const DEFAULT_AUTH_ERROR_KEY = 'auth.errors.generic';
+const ALL_AUTH_ERROR_KEYS = [...Object.values(AUTH_ERROR_KEYS), DEFAULT_AUTH_ERROR_KEY];
+
+// Matches messages that were already translated (in any language) so the function is idempotent.
+function findTranslatedKey(message: string): string | undefined {
+  return ALL_AUTH_ERROR_KEYS.find((key) => LANGUAGES.some(({ code }) => translate(code, key) === message));
+}
 
 export function translateAuthError(message: string): string {
-  const normalized = message.trim().toLowerCase();
+  const trimmed = message.trim();
+  const normalized = trimmed.toLowerCase();
 
-  if (AUTH_ERROR_VALUES.has(message.trim())) {
-    return message.trim();
+  const translatedKey = findTranslatedKey(trimmed);
+  if (translatedKey) {
+    return t(translatedKey);
   }
 
-  for (const [key, value] of Object.entries(AUTH_ERROR_MESSAGES)) {
+  for (const [key, value] of Object.entries(AUTH_ERROR_KEYS)) {
     if (normalized.includes(key)) {
-      return value;
+      return t(value);
     }
   }
 
-  return DEFAULT_AUTH_ERROR;
+  return t(DEFAULT_AUTH_ERROR_KEY);
 }

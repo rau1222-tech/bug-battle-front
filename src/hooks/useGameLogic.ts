@@ -2,7 +2,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { CARD_DEFINITIONS, DECK_SIZE, type DeckComposition } from '@/constants';
 import { applyAction, initMatch, redactFor, type DeckEntry, type MatchAction, type MatchState } from '@/game/onlineEngine';
 import { botNextAction, randomBotDeck } from '@/game/botAI';
-import { useMatchController, type ActionInput, type GameController } from '@/hooks/useMatchController';
+import { useMatchController, type ActionInput, type GameController, type LocalMessage } from '@/hooks/useMatchController';
+import { t } from '@/i18n';
 
 export type { BugState, GameController, GamePhase } from '@/hooks/useMatchController';
 
@@ -26,11 +27,11 @@ function newMatch(composition: DeckComposition[] | undefined, playerName: string
 interface LocalState {
   match: MatchState;
   version: number;
-  error: { text: string; key: number } | null;
+  error: (LocalMessage & { key: number }) | null;
 }
 
 /** Local game vs the bot, running the same engine as online matches (player = p1, bot = p2). */
-export function useGameLogic(playerComposition?: DeckComposition[], playerName = 'Jugador'): GameController {
+export function useGameLogic(playerComposition?: DeckComposition[], playerName = t('game.defaultPlayerName')): GameController {
   const setupRef = useRef({ playerComposition, playerName });
   setupRef.current = { playerComposition, playerName };
   const [local, setLocal] = useState<LocalState>(() => ({ match: newMatch(playerComposition, playerName), version: 0, error: null }));
@@ -39,7 +40,7 @@ export function useGameLogic(playerComposition?: DeckComposition[], playerName =
     setLocal((prev) => {
       const r = applyAction(prev.match, action);
       if (r.error) {
-        return { ...prev, error: { text: `⚠️ ${r.error.replace(/^⚠️\s*/, '')}`, key: (prev.error?.key ?? 0) + 1 } };
+        return { ...prev, error: { text: r.error, msg: r.errorMsg, key: (prev.error?.key ?? 0) + 1 } };
       }
       return { match: r.state, version: prev.version + 1, error: null };
     });
@@ -61,7 +62,7 @@ export function useGameLogic(playerComposition?: DeckComposition[], playerName =
   const view = useMemo(() => redactFor(match, 'p1'), [match]);
   return useMatchController(view, {
     version: local.version,
-    message: local.error?.text ?? null,
+    message: local.error,
     messageKey: local.error ? `e-${local.version}-${local.error.key}` : `v-${local.version}`,
     busy: false,
     turnDeadline: null,

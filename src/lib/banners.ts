@@ -1,3 +1,5 @@
+import { localeOf, t } from '@/i18n';
+
 /** Limits shared with the CHECK constraints and validations of public.banners / public.save_banner(). */
 export const BANNER_TITLE_MAX = 80;
 export const BANNER_CARDS_PER_PACK_MIN = 1;
@@ -26,10 +28,11 @@ export type BannerDraft = Omit<Banner, 'id'>;
 
 export type BannerStatus = 'activo' | 'programado' | 'finalizado';
 
+/** i18n keys; translate at render time. */
 export const BANNER_STATUS_LABELS: Record<BannerStatus, string> = {
-  activo: 'Activo',
-  programado: 'Programado',
-  finalizado: 'Finalizado',
+  activo: 'gacha.status.activo',
+  programado: 'gacha.status.programado',
+  finalizado: 'gacha.status.finalizado',
 };
 
 /** Mirrors the backend rule: fecha_inicio <= now <= fecha_fin. */
@@ -58,30 +61,30 @@ function isPositiveInt(value: number): boolean {
 
 export function validateBannerDraft(draft: BannerDraft): string | null {
   const titulo = draft.titulo.trim();
-  if (!titulo) return 'El título es obligatorio';
-  if (titulo.length > BANNER_TITLE_MAX) return `El título no puede superar ${BANNER_TITLE_MAX} caracteres`;
+  if (!titulo) return t('gacha.validation.titleRequired');
+  if (titulo.length > BANNER_TITLE_MAX) return t('gacha.validation.titleTooLong', { max: BANNER_TITLE_MAX });
 
   const inicio = draft.fechaInicio ? new Date(draft.fechaInicio).getTime() : NaN;
   const fin = draft.fechaFin ? new Date(draft.fechaFin).getTime() : NaN;
-  if (Number.isNaN(inicio)) return 'La fecha de inicio es obligatoria';
-  if (Number.isNaN(fin)) return 'La fecha de fin es obligatoria';
-  if (fin <= inicio) return 'La fecha de fin debe ser posterior a la fecha de inicio';
+  if (Number.isNaN(inicio)) return t('gacha.validation.startRequired');
+  if (Number.isNaN(fin)) return t('gacha.validation.endRequired');
+  if (fin <= inicio) return t('gacha.validation.endBeforeStart');
 
-  if (!isPositiveInt(draft.coste)) return 'El coste debe ser un número entero mayor que 0';
+  if (!isPositiveInt(draft.coste)) return t('gacha.validation.costInvalid');
   if (
     !Number.isInteger(draft.cartasPorSobre) ||
     draft.cartasPorSobre < BANNER_CARDS_PER_PACK_MIN ||
     draft.cartasPorSobre > BANNER_CARDS_PER_PACK_MAX
   ) {
-    return `Las cartas por sobre deben estar entre ${BANNER_CARDS_PER_PACK_MIN} y ${BANNER_CARDS_PER_PACK_MAX}`;
+    return t('gacha.validation.cardsPerPackRange', { min: BANNER_CARDS_PER_PACK_MIN, max: BANNER_CARDS_PER_PACK_MAX });
   }
 
-  if (draft.cards.length === 0) return 'El banner debe contener al menos una carta';
+  if (draft.cards.length === 0) return t('gacha.validation.noCards');
   const seen = new Set<string>();
   for (const card of draft.cards) {
-    if (seen.has(card.cardId)) return 'No se puede añadir dos veces la misma carta al banner';
+    if (seen.has(card.cardId)) return t('gacha.validation.duplicateCard');
     seen.add(card.cardId);
-    if (!isPositiveInt(card.pesoAparicion)) return 'El peso de aparición debe ser un número entero mayor que 0';
+    if (!isPositiveInt(card.pesoAparicion)) return t('gacha.validation.weightInvalid');
   }
   return null;
 }
@@ -102,5 +105,5 @@ export function fromDateTimeLocal(local: string): string {
 }
 
 export function formatBannerDate(iso: string): string {
-  return new Date(iso).toLocaleString('es-ES', { dateStyle: 'short', timeStyle: 'short' });
+  return new Date(iso).toLocaleString(localeOf(), { dateStyle: 'short', timeStyle: 'short' });
 }

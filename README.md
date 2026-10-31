@@ -12,6 +12,7 @@
 - [Estructura del Proyecto](#estructura-del-proyecto)
 - [Routing](#routing)
 - [Autenticación y Perfil](#autenticación-y-perfil)
+- [Idiomas (i18n)](#idiomas-i18n)
 - [Mecánicas de Juego](#mecánicas-de-juego)
 - [Cartas](#cartas)
 - [Habilidades Especiales](#habilidades-especiales)
@@ -61,6 +62,9 @@ src/
 │   └── index.ts         # Barrel de re-exportación
 ├── contexts/
 │   └── AuthContext.tsx   # Contexto de autenticación (user, profile, signOut)
+├── i18n/
+│   ├── index.ts         # Idioma actual, useI18n(), t(), traducción de cartas y mensajes del motor
+│   └── messages/        # Diccionarios ES/EN/FR por namespace (common, game, decks, gacha...)
 ├── hooks/
 │   ├── useAuth.ts       # Autenticación (email, Google, anónimo) con Supabase
 │   ├── useAnonAuth.ts   # Autenticación anónima legacy
@@ -121,6 +125,17 @@ La aplicación usa **React Router DOM v6** con rutas centralizadas en `src/route
 - **Anónimo**: Sesión automática para visitantes sin registro.
 - **Perfil**: Tras registrarse, el jugador elige un nombre de usuario (2-40 caracteres). El perfil se almacena en Supabase con cache local.
 - **UI**: Estilo terminal/cyberpunk. Menú de perfil con avatar y nombre en la esquina superior derecha.
+
+---
+
+## Idiomas (i18n)
+
+El juego está disponible en **español**, **inglés** y **francés**. El idioma se elige con el selector (menú de perfil y pantalla de login), se guarda en localStorage y, la primera vez, se detecta a partir del navegador.
+
+- **Textos de la UI**: src/i18n/messages/<namespace>.ts contiene las tres traducciones de cada namespace. En componentes se usa const { t } = useI18n() y 	('namespace.clave', { param }); fuera de React, 	() de @/i18n.
+- **Cartas y habilidades**: cardName, cardDescription, skillName y skillDescription traducen las cartas integradas por id (messages/content.ts); las cartas sin traducción muestran el texto guardado.
+- **Mensajes de partida**: el motor (supabase/functions/_shared/engine.ts) emite msg/errorMsg estructurados (clave + parámetros) y sigue rellenando message/error en español para compatibilidad. El cliente los muestra en el idioma del jugador.
+- **Añadir textos**: añade la clave en es, en y r. src/test/i18n.test.ts comprueba que los tres idiomas tienen las mismas claves y placeholders.
 
 ---
 

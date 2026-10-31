@@ -1,4 +1,5 @@
 import { motion } from 'framer-motion';
+import { useI18n } from '@/i18n';
 
 interface ActionMenuProps {
   actions: { id: string; label: string; description: string }[];
@@ -8,7 +9,7 @@ interface ActionMenuProps {
 }
 
 export default function ActionMenu({ actions, onSelect, onCancel, position = 'bottom' }: ActionMenuProps) {
-  return (
+  const { t } = useI18n();  return (
     <>
       {/* Backdrop */}
       <motion.div
@@ -27,7 +28,7 @@ export default function ActionMenu({ actions, onSelect, onCancel, position = 'bo
       >
         <div className="bg-stone-900/95 backdrop-blur-md border border-amber-800/40 rounded-xl shadow-2xl shadow-black/50 overflow-hidden">
           <div className="text-[9px] font-display text-amber-300/60 px-4 py-2 border-b border-amber-800/30 tracking-[0.2em] uppercase">
-            Elegir acción
+            {t('game.menu.title')}
           </div>
           {actions.map((action) => (
             <button
@@ -43,7 +44,7 @@ export default function ActionMenu({ actions, onSelect, onCancel, position = 'bo
             onClick={onCancel}
             className="w-full text-center px-4 py-2 text-xs font-display text-amber-200/40 hover:text-amber-200/70 hover:bg-amber-700/10 transition-colors"
           >
-            CANCELAR
+            {t('game.menu.cancel')}
           </button>
         </div>
       </motion.div>

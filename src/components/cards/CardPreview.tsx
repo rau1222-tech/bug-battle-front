@@ -1,11 +1,13 @@
 import { DEFAULT_CARD_IMAGE, resolveCardImage, type CardTemplate } from '@/constants';
 import cardBase from '@/assets/Base-Carta.png';
+import { useI18n } from '@/i18n';
 
 interface Props {
   card: CardTemplate;
 }
 
 export default function CardPreview({ card }: Props) {
+  const { t, cardName, cardDescription } = useI18n();
   const isProgramador = card.tipo === 'programador';
 
   return (
@@ -21,14 +23,14 @@ export default function CardPreview({ card }: Props) {
         <span className={`text-[8px] font-display font-bold tracking-wide text-center leading-none px-1 ${
           card.tipo === 'consumible' ? 'text-cyan-700' : isProgramador ? 'text-stone-900' : 'text-red-600'
         }`}>
-          {card.nombre.toUpperCase() || 'NUEVA CARTA'}
+          {cardName(card).toUpperCase() || t('cards.previewNewCard')}
         </span>
       </div>
 
       <div className="absolute top-[13%] left-[8%] right-[8%] bottom-[45%] flex items-center justify-center pointer-events-none">
         <img
           src={resolveCardImage(card.image)}
-          alt={card.nombre || 'preview'}
+          alt={cardName(card) || t('cards.previewAlt')}
           className="w-full h-full object-contain rounded-sm"
           onError={(event) => {
             const img = event.currentTarget;
@@ -42,7 +44,7 @@ export default function CardPreview({ card }: Props) {
 
       <div className="absolute top-[59%] left-[10%] right-[10%] bottom-[14%] flex items-center justify-center p-1 pointer-events-none overflow-hidden">
         <p className="text-[7px] font-body text-stone-600 text-center leading-tight">
-          {card.descripcion || 'Descripción de la carta'}
+          {cardDescription(card) || t('cards.descriptionPlaceholder')}
         </p>
       </div>
 

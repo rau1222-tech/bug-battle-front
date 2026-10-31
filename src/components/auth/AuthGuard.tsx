@@ -3,24 +3,27 @@ import { useAuth } from '@/hooks/useAuth';
 import { useProfile } from '@/hooks/useProfile';
 import { AuthContext, type SetupOutletContext } from '@/contexts/AuthContext';
 import { ROUTES } from '@/routes';
+import { useI18n } from '@/i18n';
 
 function LoadingScreen() {
+  const { t } = useI18n();
   return (
     <div className="h-[100dvh] flex items-center justify-center bg-[hsl(220,20%,6%)] bg-grid-pattern">
-      <div className="text-cyan-300/50 font-display text-sm animate-pulse tracking-wider">Cargando...</div>
+      <div className="text-cyan-300/50 font-display text-sm animate-pulse tracking-wider">{t('common.loading')}</div>
     </div>
   );
 }
 
 function ProfileErrorScreen({ onRetry }: { onRetry: () => void }) {
+  const { t } = useI18n();
   return (
     <div className="h-[100dvh] flex flex-col gap-3 items-center justify-center bg-[hsl(220,20%,6%)] bg-grid-pattern">
-      <div className="text-red-400 font-body text-sm">No se pudo cargar tu perfil.</div>
+      <div className="text-red-400 font-body text-sm">{t('auth.profileLoadError')}</div>
       <button
         onClick={onRetry}
         className="h-9 px-4 rounded-md border border-cyan-400/30 text-cyan-100 font-display text-xs tracking-wider"
       >
-        REINTENTAR
+        {t('auth.retry')}
       </button>
     </div>
   );

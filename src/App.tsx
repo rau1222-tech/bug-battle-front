@@ -6,6 +6,7 @@ import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import AuthGuard from "./components/auth/AuthGuard";
 import { ROUTES } from "./routes";
+import { useI18n } from "./i18n";
 import LoginPage from "./pages/LoginPage";
 import SetupPage from "./pages/SetupPage";
 import HomePage from "./pages/HomePage";
@@ -20,6 +21,15 @@ import NotFound from "./pages/NotFound.tsx";
 const CardCreatePage = lazy(() => import("./pages/CardCreatePage"));
 
 const queryClient = new QueryClient();
+
+const PageLoading = () => {
+  const { t } = useI18n();
+  return (
+    <div className="h-[100dvh] flex items-center justify-center bg-[hsl(220,20%,6%)] bg-grid-pattern text-cyan-300/60 font-display text-sm tracking-wider">
+      {t("common.loading")}
+    </div>
+  );
+};
 
 const App = () => (
   <QueryClientProvider client={queryClient}>
@@ -43,7 +53,7 @@ const App = () => (
             <Route
               path={ROUTES.CARD_CREATE}
               element={(
-                <Suspense fallback={<div className="h-[100dvh] flex items-center justify-center bg-[hsl(220,20%,6%)] bg-grid-pattern text-cyan-300/60 font-display text-sm tracking-wider">Cargando...</div>}>
+                <Suspense fallback={<PageLoading />}>
                   <CardCreatePage />
                 </Suspense>
               )}

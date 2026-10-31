@@ -5,9 +5,11 @@ import { getActiveDeckId, useDecks } from '@/hooks/useDecks';
 import { useAuthContext } from '@/contexts/AuthContext';
 import { ROUTES } from '@/routes';
 import { useNavigate } from 'react-router-dom';
+import { useI18n } from '@/i18n';
 
 export default function HomePage() {
   const navigate = useNavigate();
+  const { t } = useI18n();
   const { user, profile, signOut, updateProfile } = useAuthContext();
   const { decks } = useDecks(user.id);
   const [activeId, setActiveId] = useState<string | null>(null);
@@ -56,7 +58,7 @@ export default function HomePage() {
             BUG HUNTERS
           </h1>
           <p className="text-xs font-body text-cyan-300/40 mt-1 tracking-wider uppercase">
-            Collectible Card Game
+            {t('home.tagline')}
           </p>
         </div>
 
@@ -84,7 +86,7 @@ export default function HomePage() {
               className="w-full h-14 font-display text-sm tracking-wider rounded-md bg-gradient-to-r from-cyan-600/80 to-blue-600/80 text-white hover:from-cyan-500/90 hover:to-blue-500/90 border border-cyan-400/30 shadow-[0_0_20px_-5px_hsl(200,100%,50%,0.3)] transition-all hover:shadow-[0_0_25px_-5px_hsl(200,100%,50%,0.5)] flex items-center justify-center gap-2"
             >
               <span className="text-lg">▶</span>
-              <span>JUGAR VS IA</span>
+              <span>{t('home.playVsAi')}</span>
             </motion.button>
 
             <motion.button
@@ -100,7 +102,7 @@ export default function HomePage() {
             {/* Divider */}
             <div className="flex items-center gap-3 my-1">
               <div className="flex-1 h-px bg-gradient-to-r from-transparent via-cyan-500/20 to-transparent" />
-              <span className="text-[9px] font-body text-cyan-500/30 uppercase tracking-widest">Colección</span>
+              <span className="text-[9px] font-body text-cyan-500/30 uppercase tracking-widest">{t('home.collection')}</span>
               <div className="flex-1 h-px bg-gradient-to-r from-transparent via-cyan-500/20 to-transparent" />
             </div>
 
@@ -113,7 +115,7 @@ export default function HomePage() {
                 className="h-14 flex flex-col items-center justify-center gap-1 rounded-md bg-gradient-to-b from-purple-600/30 to-purple-900/30 text-purple-200 hover:from-purple-500/40 hover:to-purple-800/40 border border-purple-500/25 shadow-[0_0_15px_-5px_hsl(260,80%,60%,0.2)] transition-all hover:shadow-[0_0_20px_-5px_hsl(260,80%,60%,0.4)] hover:border-purple-400/40"
               >
                 <span className="text-xl">📦</span>
-                <span className="font-display text-[10px] tracking-[0.15em] uppercase">Reclutar</span>
+                <span className="font-display text-[10px] tracking-[0.15em] uppercase">{t('home.recruit')}</span>
               </motion.button>
 
               <motion.button
@@ -123,7 +125,7 @@ export default function HomePage() {
                 className="h-14 flex flex-col items-center justify-center gap-1 rounded-md bg-gradient-to-b from-emerald-600/30 to-emerald-900/30 text-emerald-200 hover:from-emerald-500/40 hover:to-emerald-800/40 border border-emerald-500/25 shadow-[0_0_15px_-5px_hsl(150,80%,45%,0.2)] transition-all hover:shadow-[0_0_20px_-5px_hsl(150,80%,45%,0.4)] hover:border-emerald-400/40"
               >
                 <span className="text-xl">🃏</span>
-                <span className="font-display text-[10px] tracking-[0.15em] uppercase">Mis Mazos</span>
+                <span className="font-display text-[10px] tracking-[0.15em] uppercase">{t('home.myDecks')}</span>
               </motion.button>
 
               {profile.admin && (
@@ -134,7 +136,7 @@ export default function HomePage() {
                   className="h-14 flex flex-col items-center justify-center gap-1 rounded-md bg-gradient-to-b from-cyan-600/30 to-cyan-900/30 text-cyan-200 hover:from-cyan-500/40 hover:to-cyan-800/40 border border-cyan-500/25 shadow-[0_0_15px_-5px_hsl(195,80%,55%,0.2)] transition-all hover:shadow-[0_0_20px_-5px_hsl(195,80%,55%,0.4)] hover:border-cyan-400/40"
                 >
                   <span className="text-xl">🧪</span>
-                  <span className="font-display text-[10px] tracking-[0.15em] uppercase">Crear Carta</span>
+                  <span className="font-display text-[10px] tracking-[0.15em] uppercase">{t('home.createCard')}</span>
                 </motion.button>
               )}
             </div>
@@ -143,7 +145,7 @@ export default function HomePage() {
           {/* Terminal footer */}
           <div className="px-4 py-2 border-t border-cyan-500/10 bg-[hsl(220,18%,10%)]">
             <p className="text-[10px] font-body text-cyan-400/30 flex items-center gap-1">
-              <span className="text-green-400/60">❯</span> Arrastra Programadores al Bug. Usa QA contra rivales. ¡El golpe final gana!
+              <span className="text-green-400/60">❯</span> {t('home.tip')}
             </p>
           </div>
         </div>

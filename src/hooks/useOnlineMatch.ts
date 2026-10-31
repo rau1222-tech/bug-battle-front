@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { FunctionsHttpError, type RealtimeChannel } from '@supabase/supabase-js';
 import { supabase } from '@/integrations/supabase/client';
-import { useMatchController, type ActionInput } from '@/hooks/useMatchController';
-import { ROUND_END_SECONDS, TURN_SECONDS, type MatchView, type Side } from '@/game/onlineEngine';
+import { useMatchController, type ActionInput, type LocalMessage } from '@/hooks/useMatchController';
+import { ROUND_END_SECONDS, TURN_SECONDS, type GameMessage, type MatchView, type Side } from '@/game/onlineEngine';
+import { t, translator } from '@/i18n';
 
 export interface MatchInfo {
   id: string;
@@ -20,8 +21,21 @@ interface EngineResponse {
   view: MatchView | null;
   version: number;
   error?: string;
+  errorMsg?: GameMessage;
   serverNow?: number;
 }
+
+/** Error carrying the server's structured message so it can be shown in the player's language. */
+class EngineError extends Error {
+  constructor(message: string, readonly msg?: GameMessage) {
+    super(message);
+  }
+}
+
+const errorText = (e: unknown, fallbackKey: string) => {
+  if (e instanceof EngineError && e.msg) return translator().gameMessage(e.msg);
+  return e instanceof Error ? e.message : t(fallbackKey);
+};
 
 const MATCH_COLUMNS = 'id, code, status, host_id, guest_id, host_name, guest_name, winner_id';
 
@@ -67,7 +81,7 @@ export function useOnlineMatch(matchId: string, userId: string) {
   const [match, setMatch] = useState<MatchInfo | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [snap, setSnap] = useState<{ view: MatchView; version: number } | null>(null);
-  const [localMessage, setLocalMessage] = useState<{ text: string; key: number } | null>(null);
+  const [localMessage, setLocalMessage] = useState<(LocalMessage & { key: number }) | null>(null);
   const [opponentOnline, setOpponentOnline] = useState<boolean | null>(null);
   const [pending, setPending] = useState(0);
   /** serverNow - clientNow, so server timestamps can be shown on the local clock */
@@ -89,14 +103,17 @@ export function useOnlineMatch(matchId: string, userId: string) {
     const { data, error } = await supabase.functions.invoke<EngineResponse>('match-engine', { body: { matchId, ...body } });
     if (error) {
       let message = error.message;
+      let msg: GameMessage | undefined;
       if (error instanceof FunctionsHttpError) {
         try {
-          message = (await error.context.json()).error ?? message;
+          const body = await error.context.json();
+          message = body.error ?? message;
+          msg = body.errorMsg;
         } catch {
           // Non-JSON error body: keep the generic message
         }
       }
-      throw new Error(message);
+      throw new EngineError(message, msg);
     }
     if (typeof data?.serverNow === 'number') setClockOffset(data.serverNow - Date.now());
     return data!;
@@ -105,7 +122,7 @@ export function useOnlineMatch(matchId: string, userId: string) {
   const load = useCallback(async () => {
     const { data: m, error } = await supabase.from('matches').select(MATCH_COLUMNS).eq('id', matchId).maybeSingle<MatchInfo>();
     if (error || !m) {
-      setLoadError(error?.message ?? 'Partida no encontrada');
+      setLoadError(error?.message ?? t('engine.server.notFound'));
       return;
     }
     setMatch(m);
@@ -126,7 +143,7 @@ export function useOnlineMatch(matchId: string, userId: string) {
       const r = await callEngine({ op: 'state' });
       acceptView(r.view, r.version);
     } catch (e) {
-      setLoadError(e instanceof Error ? e.message : 'Error al cargar la partida');
+      setLoadError(errorText(e, 'online.loadError'));
     }
   }, [matchId, acceptView, callEngine]);
 
@@ -169,9 +186,9 @@ export function useOnlineMatch(matchId: string, userId: string) {
   }, [status, matchId]);
   const you: Side = view?.you ?? (match?.host_id === userId ? 'p1' : 'p2');
 
-  const showError = useCallback((text: string) => {
+  const showError = useCallback((text: string, msg?: GameMessage | null) => {
     errorKeyRef.current += 1;
-    setLocalMessage({ text: `⚠️ ${text.replace(/^⚠️\s*/, '')}`, key: errorKeyRef.current });
+    setLocalMessage({ text, msg, key: errorKeyRef.current });
   }, []);
 
   const dispatch = useCallback((action: ActionInput) => {
@@ -181,9 +198,10 @@ export function useOnlineMatch(matchId: string, userId: string) {
       try {
         const r = await callEngine({ op: 'action', action });
         acceptView(r.view, r.version);
-        if (r.error) showError(r.error);
+        if (r.error) showError(r.error, r.errorMsg);
       } catch (e) {
-        showError(e instanceof Error ? e.message : 'Error de conexión');
+        if (e instanceof EngineError) showError(e.message, e.msg);
+        else showError(e instanceof Error ? e.message : t('online.connectionError'));
       } finally {
         setPending((n) => n - 1);
       }
@@ -220,7 +238,7 @@ export function useOnlineMatch(matchId: string, userId: string) {
   const noop = useCallback(() => {}, []);
   const game = useMatchController(view, {
     version,
-    message: localMessage?.text ?? null,
+    message: localMessage,
     messageKey: localMessage ? `e-${version}-${localMessage.key}` : `v-${version}`,
     busy: pending > 0,
     turnDeadline,

@@ -1,5 +1,7 @@
 import { useState } from 'react';
 import { motion } from 'framer-motion';
+import LanguageSwitcher from '@/components/LanguageSwitcher';
+import { useI18n } from '@/i18n';
 
 interface PickNameScreenProps {
   suggestedName?: string;
@@ -8,6 +10,7 @@ interface PickNameScreenProps {
 }
 
 export default function PickNameScreen({ suggestedName, avatarUrl, onConfirm }: PickNameScreenProps) {
+  const { t } = useI18n();
   const [name, setName] = useState(suggestedName ?? '');
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -16,11 +19,11 @@ export default function PickNameScreen({ suggestedName, avatarUrl, onConfirm }: 
     e.preventDefault();
     const trimmed = name.trim();
     if (!trimmed || trimmed.length < 2) {
-      setError('El nombre debe tener al menos 2 caracteres');
+      setError(t('auth.nameTooShort', { min: 2 }));
       return;
     }
     if (trimmed.length > 40) {
-      setError('Máximo 40 caracteres');
+      setError(t('auth.nameTooLong', { max: 40 }));
       return;
     }
     setError(null);
@@ -28,7 +31,7 @@ export default function PickNameScreen({ suggestedName, avatarUrl, onConfirm }: 
     try {
       await onConfirm(trimmed);
     } catch {
-      setError('Error al guardar. Inténtalo de nuevo.');
+      setError(t('auth.saveError'));
       setLoading(false);
     }
   };
@@ -38,6 +41,8 @@ export default function PickNameScreen({ suggestedName, avatarUrl, onConfirm }: 
       {/* Ambient glow effects */}
       <div className="absolute top-1/4 left-1/3 w-72 h-72 bg-cyan-500/5 rounded-full blur-[100px] pointer-events-none" />
       <div className="absolute bottom-1/3 right-1/4 w-60 h-60 bg-purple-500/5 rounded-full blur-[100px] pointer-events-none" />
+
+      <LanguageSwitcher className="fixed top-4 right-4 z-30" />
 
       <motion.div
         initial={{ opacity: 0, y: 30 }}
@@ -76,10 +81,10 @@ export default function PickNameScreen({ suggestedName, avatarUrl, onConfirm }: 
           {/* Panel content */}
           <div className="p-5 flex flex-col gap-4">
             <h2 className="text-center font-display text-lg text-cyan-100 tracking-wide">
-              ¡Bienvenido, cazador!
+              {t('auth.welcome')}
             </h2>
             <p className="text-center text-[11px] text-cyan-300/40 font-body -mt-2">
-              Elige el nombre con el que jugarás
+              {t('auth.pickNameSubtitle')}
             </p>
 
             {avatarUrl && (
@@ -96,7 +101,7 @@ export default function PickNameScreen({ suggestedName, avatarUrl, onConfirm }: 
             <form onSubmit={handleSubmit} className="flex flex-col gap-3">
               <input
                 type="text"
-                placeholder="Tu nombre de jugador"
+                placeholder={t('auth.namePlaceholder')}
                 value={name}
                 onChange={(e) => setName(e.target.value)}
                 maxLength={40}
@@ -115,7 +120,7 @@ export default function PickNameScreen({ suggestedName, avatarUrl, onConfirm }: 
                 whileTap={{ scale: 0.98 }}
                 className="h-11 rounded-md bg-gradient-to-r from-cyan-600/80 to-blue-600/80 text-white hover:from-cyan-500/90 hover:to-blue-500/90 border border-cyan-400/30 font-display text-sm tracking-wider transition-all shadow-[0_0_20px_-5px_hsl(200,100%,50%,0.3)] hover:shadow-[0_0_25px_-5px_hsl(200,100%,50%,0.5)] disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                {loading ? '...' : 'CONFIRMAR'}
+                {loading ? '...' : t('auth.confirm')}
               </motion.button>
             </form>
           </div>
@@ -123,7 +128,7 @@ export default function PickNameScreen({ suggestedName, avatarUrl, onConfirm }: 
           {/* Terminal footer */}
           <div className="px-4 py-2 border-t border-cyan-500/10 bg-[hsl(220,18%,10%)]">
             <p className="text-[10px] font-body text-cyan-400/30 flex items-center gap-1">
-              <span className="text-green-400/60">❯</span> Podrás cambiar tu nombre más adelante.
+              <span className="text-green-400/60">❯</span> {t('auth.nameChangeLater')}
             </p>
           </div>
         </div>

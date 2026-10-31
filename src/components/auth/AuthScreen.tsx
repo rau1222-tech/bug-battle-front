@@ -1,6 +1,8 @@
 import { useState } from 'react';
 import { motion } from 'framer-motion';
 import { translateAuthError } from '@/constants/authErrors';
+import LanguageSwitcher from '@/components/LanguageSwitcher';
+import { useI18n } from '@/i18n';
 
 interface AuthScreenProps {
   onSignInEmail: (email: string, password: string) => Promise<{ error: string | null }>;
@@ -9,6 +11,7 @@ interface AuthScreenProps {
 }
 
 export default function AuthScreen({ onSignInEmail, onSignUpEmail, onSignInGoogle }: AuthScreenProps) {
+  const { t } = useI18n();
   const [mode, setMode] = useState<'login' | 'register'>('login');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -25,22 +28,22 @@ export default function AuthScreen({ onSignInEmail, onSignUpEmail, onSignInGoogl
     setSuccess(null);
 
     if (!email || !password) {
-      setError('Completa todos los campos');
+      setError(t('auth.errors.fillAllFields'));
       return;
     }
 
     if (!isValidEmail(email)) {
-      setError('El formato del correo electrónico no es válido');
+      setError(t('auth.errors.invalidEmail'));
       return;
     }
 
     if (mode === 'register' && password !== confirmPassword) {
-      setError('Las contraseñas no coinciden');
+      setError(t('auth.errors.passwordsMismatch'));
       return;
     }
 
     if (password.length < 6) {
-      setError('La contraseña debe tener al menos 6 caracteres');
+      setError(t('auth.errors.passwordTooShort'));
       return;
     }
 
@@ -52,7 +55,7 @@ export default function AuthScreen({ onSignInEmail, onSignUpEmail, onSignInGoogl
       } else {
         const { error: err } = await onSignUpEmail(email, password);
         if (err) setError(translateAuthError(err));
-        else setSuccess('¡Cuenta creada! Revisa tu email para confirmar.');
+        else setSuccess(t('auth.accountCreated'));
       }
     } finally {
       setLoading(false);
@@ -75,6 +78,8 @@ export default function AuthScreen({ onSignInEmail, onSignUpEmail, onSignInGoogl
       <div className="absolute top-1/4 left-1/3 w-72 h-72 bg-cyan-500/5 rounded-full blur-[100px] pointer-events-none" />
       <div className="absolute bottom-1/3 right-1/4 w-60 h-60 bg-purple-500/5 rounded-full blur-[100px] pointer-events-none" />
 
+      <LanguageSwitcher className="fixed top-4 right-4 z-30" />
+
       <motion.div
         initial={{ opacity: 0, y: 30 }}
         animate={{ opacity: 1, y: 0 }}
@@ -94,7 +99,7 @@ export default function AuthScreen({ onSignInEmail, onSignUpEmail, onSignInGoogl
             BUG HUNTERS
           </h1>
           <p className="text-xs font-body text-cyan-300/40 mt-1 tracking-wider uppercase">
-            Collectible Card Game
+            {t('auth.tagline')}
           </p>
         </div>
 
@@ -124,7 +129,7 @@ export default function AuthScreen({ onSignInEmail, onSignUpEmail, onSignInGoogl
                     : 'text-cyan-300/30 hover:text-cyan-300/50'
                 }`}
               >
-                INICIAR SESIÓN
+                {t('auth.tabLogin')}
               </button>
               <button
                 onClick={() => { setMode('register'); setError(null); setSuccess(null); }}
@@ -134,7 +139,7 @@ export default function AuthScreen({ onSignInEmail, onSignUpEmail, onSignInGoogl
                     : 'text-cyan-300/30 hover:text-cyan-300/50'
                 }`}
               >
-                REGISTRO
+                {t('auth.tabRegister')}
               </button>
             </div>
 
@@ -162,13 +167,13 @@ export default function AuthScreen({ onSignInEmail, onSignUpEmail, onSignInGoogl
                   fill="#EA4335"
                 />
               </svg>
-              {mode === 'login' ? 'Continuar con Google' : 'Registrarse con Google'}
+              {mode === 'login' ? t('auth.googleContinue') : t('auth.googleRegister')}
             </button>
 
             {/* Divider */}
             <div className="flex items-center gap-3">
               <div className="flex-1 h-px bg-gradient-to-r from-transparent via-cyan-500/20 to-transparent" />
-              <span className="text-[9px] font-body text-cyan-500/30 uppercase tracking-widest">o con email</span>
+              <span className="text-[9px] font-body text-cyan-500/30 uppercase tracking-widest">{t('auth.orWithEmail')}</span>
               <div className="flex-1 h-px bg-gradient-to-r from-transparent via-cyan-500/20 to-transparent" />
             </div>
 
@@ -176,14 +181,14 @@ export default function AuthScreen({ onSignInEmail, onSignUpEmail, onSignInGoogl
             <form onSubmit={handleSubmit} className="flex flex-col gap-3">
               <input
                 type="email"
-                placeholder="Email"
+                placeholder={t('auth.emailPlaceholder')}
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 className="h-10 px-3 rounded-md bg-[hsl(220,15%,12%)] border border-cyan-500/15 text-cyan-100 text-sm font-body placeholder:text-cyan-300/20 focus:outline-none focus:border-cyan-400/40 focus:shadow-[0_0_10px_-3px_hsl(200,100%,50%,0.2)] transition-all"
               />
               <input
                 type="password"
-                placeholder="Contraseña"
+                placeholder={t('auth.passwordPlaceholder')}
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 className="h-10 px-3 rounded-md bg-[hsl(220,15%,12%)] border border-cyan-500/15 text-cyan-100 text-sm font-body placeholder:text-cyan-300/20 focus:outline-none focus:border-cyan-400/40 focus:shadow-[0_0_10px_-3px_hsl(200,100%,50%,0.2)] transition-all"
@@ -191,7 +196,7 @@ export default function AuthScreen({ onSignInEmail, onSignUpEmail, onSignInGoogl
               {mode === 'register' && (
                 <input
                   type="password"
-                  placeholder="Confirmar contraseña"
+                  placeholder={t('auth.confirmPasswordPlaceholder')}
                   value={confirmPassword}
                   onChange={(e) => setConfirmPassword(e.target.value)}
                   className="h-10 px-3 rounded-md bg-[hsl(220,15%,12%)] border border-cyan-500/15 text-cyan-100 text-sm font-body placeholder:text-cyan-300/20 focus:outline-none focus:border-cyan-400/40 focus:shadow-[0_0_10px_-3px_hsl(200,100%,50%,0.2)] transition-all"
@@ -215,8 +220,8 @@ export default function AuthScreen({ onSignInEmail, onSignUpEmail, onSignInGoogl
                 {loading
                   ? '...'
                   : mode === 'login'
-                    ? 'ENTRAR'
-                    : 'CREAR CUENTA'}
+                    ? t('auth.submitLogin')
+                    : t('auth.submitRegister')}
               </motion.button>
             </form>
           </div>
@@ -224,7 +229,7 @@ export default function AuthScreen({ onSignInEmail, onSignUpEmail, onSignInGoogl
           {/* Terminal footer */}
           <div className="px-4 py-2 border-t border-cyan-500/10 bg-[hsl(220,18%,10%)]">
             <p className="text-[10px] font-body text-cyan-400/30 flex items-center gap-1">
-              <span className="text-green-400/60">❯</span> Al continuar con Google, tu cuenta se crea automáticamente.
+              <span className="text-green-400/60">❯</span> {t('auth.googleFooter')}
             </p>
           </div>
         </div>

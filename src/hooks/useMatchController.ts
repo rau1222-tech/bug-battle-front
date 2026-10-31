@@ -1,10 +1,17 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { CARD_DEFINITIONS, type CardInstance } from '@/constants';
-import type { EngineCard, MatchAction, MatchView, Side } from '@/game/onlineEngine';
+import type { EngineCard, GameMessage, MatchAction, MatchView, Side } from '@/game/onlineEngine';
+import { useI18n } from '@/i18n';
 
 export type BugState = 'idle' | 'hit' | 'death';
 export type GamePhase = 'playing' | 'round-end' | 'game-over';
 export type ViewSide = 'player' | 'bot';
+
+/** A message as structured engine data (translated on render) with a plain-text fallback. */
+export interface LocalMessage {
+  msg?: GameMessage | null;
+  text: string;
+}
 
 export type ActionInput = MatchAction extends infer A ? (A extends MatchAction ? Omit<A, 'side'> : never) : never;
 
@@ -69,7 +76,8 @@ const hydrateTable = (table: (EngineCard | null)[]) => table.map((c) => (c ? hyd
 
 interface ControllerOptions {
   version: number;
-  message: string | null;
+  /** Local error shown instead of the view's log message. */
+  message: LocalMessage | null;
   messageKey: string;
   busy: boolean;
   turnDeadline: number | null;
@@ -83,6 +91,7 @@ export function useMatchController(view: MatchView | null, opts: ControllerOptio
   const [highlight, setHighlight] = useState<{ cardId: string | null; targetId: string | null }>({ cardId: null, targetId: null });
   const [bugHit, setBugHit] = useState(false);
   const you: Side = view?.you ?? 'p1';
+  const { gameMessage } = useI18n();
 
   const lastAction = view?.lastAction ?? null;
   useEffect(() => {
@@ -131,7 +140,9 @@ export function useMatchController(view: MatchView | null, opts: ControllerOptio
       gamePhase: view.gamePhase,
       turn: toView(view.turn)!,
       lastAttacker: toView(view.lastAttacker),
-      message: message ?? view.message,
+      message: message
+        ? `⚠️ ${(message.msg ? gameMessage(message.msg) : message.text).replace(/^⚠️\s*/, '')}`
+        : view.msg ? gameMessage(view.msg) : view.message,
       messageKey,
       lastAction: la ? { side: toView(la.side)!, type: la.type, cardId: la.cardId, targetId: la.targetId ?? null, defId: la.defId ?? null } : null,
       actionKey: version,
@@ -152,5 +163,5 @@ export function useMatchController(view: MatchView | null, opts: ControllerOptio
       startNewRound: () => dispatch({ type: 'NEXT_ROUND' }),
       restartGame: restart,
     };
-  }, [view, you, bugHit, message, messageKey, version, highlight, busy, turnDeadline, dispatch, restart]);
+  }, [view, you, bugHit, message, messageKey, version, highlight, busy, turnDeadline, dispatch, restart, gameMessage]);
 }

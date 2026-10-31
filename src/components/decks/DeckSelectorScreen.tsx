@@ -9,9 +9,11 @@ import {
   duplicateDeck,
   setActiveDeckId,
   getActiveDeckId,
+  deckDisplayName,
   type DeckSummary,
 } from '@/hooks/useDecks';
 import { toast } from 'sonner';
+import { useI18n } from '@/i18n';
 
 interface Props {
   onBack: () => void;
@@ -21,6 +23,7 @@ interface Props {
 }
 
 export default function DeckSelectorScreen({ onBack, onPlay, onCreate, onEdit }: Props) {
+  const { t } = useI18n();
   const { user, loading: authLoading } = useAuth();
   const { decks, loading, refresh } = useDecks(user?.id);
   const [activeId, setActiveId] = useState<string | null>(null);
@@ -45,17 +48,17 @@ export default function DeckSelectorScreen({ onBack, onPlay, onCreate, onEdit }:
     setBusyId(deck.id);
     try {
       await duplicateDeck(deck);
-      toast.success(`${deck.name} duplicado`);
+      toast.success(t('decks.selector.duplicated', { name: deckDisplayName(deck) }));
       await refresh();
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : 'Error al duplicar');
+      toast.error(e instanceof Error ? e.message : t('decks.selector.duplicateError'));
     } finally {
       setBusyId(null);
     }
   };
 
   const handleDelete = async (deck: DeckSummary) => {
-    if (!confirm(`¿Eliminar "${deck.name}"?`)) return;
+    if (!confirm(t('decks.selector.deleteConfirm', { name: deckDisplayName(deck) }))) return;
     setBusyId(deck.id);
     try {
       await deleteDeckRecord(deck.id);
@@ -63,10 +66,10 @@ export default function DeckSelectorScreen({ onBack, onPlay, onCreate, onEdit }:
         await setActiveDeckId(user?.id, null);
         setActiveId(null);
       }
-      toast.success('Mazo eliminado');
+      toast.success(t('decks.selector.deleted'));
       await refresh();
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : 'Error al eliminar');
+      toast.error(e instanceof Error ? e.message : t('decks.selector.deleteError'));
     } finally {
       setBusyId(null);
     }
@@ -77,7 +80,7 @@ export default function DeckSelectorScreen({ onBack, onPlay, onCreate, onEdit }:
     try {
       await setActiveDeckId(user?.id, deck.id);
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : 'No se pudo guardar el mazo activo');
+      toast.error(e instanceof Error ? e.message : t('decks.selector.activeError'));
     }
     onPlay(deck);
   };
@@ -86,9 +89,9 @@ export default function DeckSelectorScreen({ onBack, onPlay, onCreate, onEdit }:
     setActiveId(deck.id);
     try {
       await setActiveDeckId(user?.id, deck.id);
-      toast.success(`"${deck.name}" seleccionado`);
+      toast.success(t('decks.selector.selected', { name: deckDisplayName(deck) }));
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : 'No se pudo guardar el mazo activo');
+      toast.error(e instanceof Error ? e.message : t('decks.selector.activeError'));
     }
   };
 
@@ -106,7 +109,7 @@ export default function DeckSelectorScreen({ onBack, onPlay, onCreate, onEdit }:
         <div className="flex items-center justify-between mb-6">
           <BackButton onClick={onBack} color="emerald" />
           <h1 className="font-display text-lg sm:text-2xl text-emerald-100 tracking-wider text-glow-green">
-            🃏 MIS MAZOS
+            {t('decks.selector.title')}
           </h1>
           <div className="w-20" />
         </div>
@@ -120,7 +123,7 @@ export default function DeckSelectorScreen({ onBack, onPlay, onCreate, onEdit }:
         {!authLoading && !loading && (
           <>
             {/* Presets */}
-            <Section title="Mazos predefinidos" subtitle="Listos para jugar — no se pueden editar">
+            <Section title={t('decks.selector.presets')} subtitle={t('decks.selector.presetsSubtitle')}>
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
                 <AnimatePresence>
                   {presets.map((d) => (
@@ -139,7 +142,7 @@ export default function DeckSelectorScreen({ onBack, onPlay, onCreate, onEdit }:
             </Section>
 
             {/* User decks */}
-            <Section title="Mis mazos personalizados" subtitle={`${mine.length} mazo${mine.length === 1 ? '' : 's'} creado${mine.length === 1 ? '' : 's'}`}>
+            <Section title={t('decks.selector.mine')} subtitle={t(mine.length === 1 ? 'decks.selector.createdOne' : 'decks.selector.createdMany', { count: mine.length })}>
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
                 <button
                   onClick={onCreate}
@@ -147,7 +150,7 @@ export default function DeckSelectorScreen({ onBack, onPlay, onCreate, onEdit }:
                 >
                   <Plus className="w-8 h-8 text-emerald-300/50 group-hover:text-emerald-200 transition-colors" />
                   <span className="font-display text-xs tracking-wider text-emerald-200/60 group-hover:text-emerald-100">
-                    CREAR MAZO NUEVO
+                    {t('decks.selector.createNew')}
                   </span>
                 </button>
                 <AnimatePresence>
@@ -210,6 +213,7 @@ interface DeckCardProps {
 }
 
 function DeckCard({ deck, isActive, busy, onPlay, onSetActive, onEdit, onDuplicate, onDelete }: DeckCardProps) {
+  const { t } = useI18n();
   const isValid = deck.total === 20;
   return (
     <motion.div
@@ -224,24 +228,24 @@ function DeckCard({ deck, isActive, busy, onPlay, onSetActive, onEdit, onDuplica
     >
       {isActive && (
         <div className="absolute top-2 right-2 z-10 flex items-center gap-1 bg-emerald-500/90 text-emerald-950 px-1.5 py-0.5 rounded text-[9px] font-display font-bold tracking-wider">
-          <Check className="w-3 h-3" /> ACTIVO
+          <Check className="w-3 h-3" /> {t('decks.selector.active')}
         </div>
       )}
       <div className="p-3">
         <div className="flex items-start gap-3">
           <div className="text-4xl sm:text-5xl shrink-0">{deck.cover_emoji}</div>
           <div className="flex-1 min-w-0">
-            <h3 className="font-display text-sm text-emerald-100 truncate">{deck.name}</h3>
+            <h3 className="font-display text-sm text-emerald-100 truncate">{deckDisplayName(deck)}</h3>
             <div className="flex items-center gap-2 mt-1 text-[10px] font-body">
               <span className="text-cyan-300/60">
-                ⚡ {deck.programadores} <span className="text-cyan-300/40">prog</span>
+                ⚡ {deck.programadores} <span className="text-cyan-300/40">{t('decks.stat.prog')}</span>
               </span>
               <span className="text-emerald-300/70">
-                🛡 {deck.qas} <span className="text-emerald-300/50">qa</span>
+                🛡 {deck.qas} <span className="text-emerald-300/50">{t('decks.stat.qa')}</span>
               </span>
               {deck.consumibles > 0 && (
                 <span className="text-violet-300/70">
-                  🧪 {deck.consumibles} <span className="text-violet-300/50">cons</span>
+                  🧪 {deck.consumibles} <span className="text-violet-300/50">{t('decks.stat.cons')}</span>
                 </span>
               )}
               <span className={`ml-auto font-display font-bold ${isValid ? 'text-emerald-300' : 'text-red-400'}`}>
@@ -255,7 +259,7 @@ function DeckCard({ deck, isActive, busy, onPlay, onSetActive, onEdit, onDuplica
                   : 'bg-emerald-900/40 text-emerald-200/90 border border-emerald-600/20'
               }`}
             >
-              {deck.is_preset ? 'Preset' : 'Mío'}
+              {deck.is_preset ? t('decks.selector.badgePreset') : t('decks.selector.badgeMine')}
             </span>
           </div>
         </div>
@@ -266,14 +270,14 @@ function DeckCard({ deck, isActive, busy, onPlay, onSetActive, onEdit, onDuplica
             disabled={!isValid || busy}
             className="flex-1 min-w-[80px] flex items-center justify-center gap-1 h-8 rounded-md bg-emerald-600/60 hover:bg-emerald-500/70 text-emerald-50 font-display text-[10px] tracking-wider disabled:opacity-40 disabled:cursor-not-allowed transition-colors border border-emerald-500/20"
           >
-            <Play className="w-3 h-3" /> JUGAR
+            <Play className="w-3 h-3" /> {t('decks.selector.play')}
           </button>
           {!isActive && (
             <button
               onClick={onSetActive}
               disabled={!isValid || busy}
               className="px-2 h-8 rounded-md bg-[hsl(220,15%,15%)] hover:bg-[hsl(220,15%,20%)] text-emerald-200/80 font-display text-[10px] tracking-wider disabled:opacity-40 transition-colors border border-emerald-800/30"
-              title="Marcar como activo"
+              title={t('decks.selector.setActive')}
             >
               <Check className="w-3 h-3" />
             </button>
@@ -283,7 +287,7 @@ function DeckCard({ deck, isActive, busy, onPlay, onSetActive, onEdit, onDuplica
               onClick={onEdit}
               disabled={busy}
               className="px-2 h-8 rounded-md bg-[hsl(220,15%,15%)] hover:bg-[hsl(220,15%,20%)] text-emerald-200/80 transition-colors disabled:opacity-40 border border-emerald-800/30"
-              title="Editar"
+              title={t('decks.selector.edit')}
             >
               <Pencil className="w-3 h-3" />
             </button>
@@ -293,7 +297,7 @@ function DeckCard({ deck, isActive, busy, onPlay, onSetActive, onEdit, onDuplica
               onClick={onDuplicate}
               disabled={busy}
               className="px-2 h-8 rounded-md bg-[hsl(220,15%,15%)] hover:bg-[hsl(220,15%,20%)] text-emerald-200/80 transition-colors disabled:opacity-40 border border-emerald-800/30"
-              title="Duplicar"
+              title={t('decks.selector.duplicate')}
             >
               {busy ? <Loader2 className="w-3 h-3 animate-spin" /> : <Copy className="w-3 h-3" />}
             </button>
@@ -303,7 +307,7 @@ function DeckCard({ deck, isActive, busy, onPlay, onSetActive, onEdit, onDuplica
               onClick={onDelete}
               disabled={busy}
               className="px-2 h-8 rounded-md bg-red-900/40 hover:bg-red-800/60 text-red-200 transition-colors disabled:opacity-40 border border-red-700/20"
-              title="Eliminar"
+              title={t('decks.selector.delete')}
             >
               <Trash2 className="w-3 h-3" />
             </button>

@@ -2,16 +2,33 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { useAuthContext } from '@/contexts/AuthContext';
-import { getActiveDeckId, useDecks } from '@/hooks/useDecks';
+import { deckDisplayName, getActiveDeckId, useDecks } from '@/hooks/useDecks';
 import { cancelRandomMatch, createMatch, findRandomMatch, joinMatch } from '@/hooks/useOnlineMatch';
 import { DECK_SIZE, MAX_COPIES } from '@/constants';
 import { matchPath, ROUTES } from '@/routes';
+import { useI18n } from '@/i18n';
 
 const CODE_RE = /^[A-HJ-NP-Z2-9]{6}$/;
 const QUEUE_POLL_MS = 2000;
+const UNEXPECTED_ERROR = 'online.unexpectedError';
+
+/** Known errors raised by the database RPCs (in Spanish) mapped to translation keys. */
+const ERROR_KEYS: Record<string, string> = {
+  [UNEXPECTED_ERROR]: UNEXPECTED_ERROR,
+  'No autenticado': 'online.db.notAuthenticated',
+  'Perfil no encontrado': 'online.db.profileNotFound',
+  'Mazo no encontrado': 'online.db.deckNotFound',
+  'El mazo debe tener 20 cartas y máximo 2 copias (edítalo y guárdalo de nuevo)': 'online.db.invalidDeck',
+  'No se pudo generar un código, inténtalo de nuevo': 'online.db.codeGenerationFailed',
+  'No se pudo crear la partida, inténtalo de nuevo': 'online.db.createFailed',
+  'No existe ninguna partida con ese código': 'online.db.codeNotFound',
+  'La partida ya ha terminado': 'online.db.matchFinished',
+  'La partida ya no está disponible': 'online.db.matchUnavailable',
+};
 
 export default function OnlinePage() {
   const navigate = useNavigate();
+  const { t } = useI18n();
   const [params] = useSearchParams();
   const { user } = useAuthContext();
   const { decks, loading } = useDecks(user.id);
@@ -50,7 +67,7 @@ export default function OnlinePage() {
         timer = setTimeout(() => void poll(), QUEUE_POLL_MS);
       } catch (e) {
         if (stopped) return;
-        setError(e instanceof Error ? e.message : 'Error inesperado');
+        setError(e instanceof Error ? e.message : UNEXPECTED_ERROR);
         setSearchStartedAt(null);
       }
     };
@@ -92,7 +109,7 @@ export default function OnlinePage() {
     try {
       navigate(matchPath(await fn()));
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Error inesperado');
+      setError(e instanceof Error ? e.message : UNEXPECTED_ERROR);
       setBusy(false);
     }
   };
@@ -110,20 +127,20 @@ export default function OnlinePage() {
       >
         <div className="flex items-center justify-between">
           <button onClick={() => navigate(ROUTES.HOME)} className="text-xs font-display text-cyan-300/60 hover:text-cyan-200">
-            ← VOLVER
+            {t('online.back')}
           </button>
-          <h1 className="font-display text-cyan-100 tracking-[0.2em] text-lg">🌐 ONLINE PvP</h1>
+          <h1 className="font-display text-cyan-100 tracking-[0.2em] text-lg">{t('online.title')}</h1>
           <span className="w-12" />
         </div>
 
         <section className="flex flex-col gap-2">
-          <h2 className="text-[10px] font-body text-cyan-400/50 uppercase tracking-widest">1. Elige tu mazo</h2>
+          <h2 className="text-[10px] font-body text-cyan-400/50 uppercase tracking-widest">{t('online.chooseDeck')}</h2>
           {loading ? (
-            <p className="text-xs text-cyan-200/40 font-body">Cargando mazos…</p>
+            <p className="text-xs text-cyan-200/40 font-body">{t('online.loadingDecks')}</p>
           ) : validDecks.length === 0 ? (
             <p className="text-xs text-amber-300/80 font-body">
-              Necesitas un mazo de {DECK_SIZE} cartas (máx. {MAX_COPIES} copias).{' '}
-              <button className="underline" onClick={() => navigate(ROUTES.DECKS)}>Ir a mis mazos</button>
+              {t('online.needDeck', { size: DECK_SIZE, copies: MAX_COPIES })}{' '}
+              <button className="underline" onClick={() => navigate(ROUTES.DECKS)}>{t('online.goToDecks')}</button>
             </p>
           ) : (
             <div className="grid grid-cols-2 gap-2 max-h-48 overflow-y-auto pr-1">
@@ -139,7 +156,7 @@ export default function OnlinePage() {
                   }`}
                 >
                   <span className="text-lg">{d.cover_emoji}</span>
-                  <span className="font-display text-[11px] tracking-wide truncate">{d.name}</span>
+                  <span className="font-display text-[11px] tracking-wide truncate">{deckDisplayName(d)}</span>
                 </button>
               ))}
             </div>
@@ -147,7 +164,7 @@ export default function OnlinePage() {
         </section>
 
         <section className="flex flex-col gap-2">
-          <h2 className="text-[10px] font-body text-cyan-400/50 uppercase tracking-widest">2. Juega contra un rival aleatorio…</h2>
+          <h2 className="text-[10px] font-body text-cyan-400/50 uppercase tracking-widest">{t('online.randomTitle')}</h2>
           {searchStartedAt !== null ? (
             <div className="h-12 flex items-center justify-between gap-3 rounded-md border border-fuchsia-400/40 bg-fuchsia-500/10 px-3">
               <motion.span
@@ -155,13 +172,13 @@ export default function OnlinePage() {
                 transition={{ duration: 1.6, repeat: Infinity }}
                 className="font-display text-xs tracking-wider text-fuchsia-100"
               >
-                🔎 BUSCANDO RIVAL… {Math.max(0, Math.floor((now - searchStartedAt) / 1000))}s
+                {t('online.searching', { seconds: Math.max(0, Math.floor((now - searchStartedAt) / 1000)) })}
               </motion.span>
               <button
                 onClick={() => setSearchStartedAt(null)}
                 className="font-display text-xs tracking-wider text-red-300/80 hover:text-red-200"
               >
-                CANCELAR
+                {t('online.cancel')}
               </button>
             </div>
           ) : (
@@ -174,31 +191,31 @@ export default function OnlinePage() {
               }}
               className="h-12 font-display text-sm tracking-wider rounded-md bg-gradient-to-r from-fuchsia-600/80 to-purple-600/80 text-white border border-fuchsia-400/30 disabled:opacity-40 disabled:cursor-not-allowed"
             >
-              🎲 BUSCAR PARTIDA ALEATORIA
+              {t('online.findRandom')}
             </button>
           )}
         </section>
 
         <section className="flex flex-col gap-2">
-          <h2 className="text-[10px] font-body text-cyan-400/50 uppercase tracking-widest">…o crea una partida privada…</h2>
+          <h2 className="text-[10px] font-body text-cyan-400/50 uppercase tracking-widest">{t('online.privateTitle')}</h2>
           <button
             disabled={!deckId || busy || searching}
             onClick={handleCreate}
             className="h-12 font-display text-sm tracking-wider rounded-md bg-gradient-to-r from-cyan-600/80 to-blue-600/80 text-white border border-cyan-400/30 disabled:opacity-40 disabled:cursor-not-allowed"
           >
-            CREAR PARTIDA
+            {t('online.createMatch')}
           </button>
         </section>
 
         <section className="flex flex-col gap-2">
-          <h2 className="text-[10px] font-body text-cyan-400/50 uppercase tracking-widest">…o únete con un código</h2>
+          <h2 className="text-[10px] font-body text-cyan-400/50 uppercase tracking-widest">{t('online.joinTitle')}</h2>
           <div className="flex gap-2">
             <input
               value={code}
               onChange={(e) => setCode(e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 6))}
               onKeyDown={(e) => { if (e.key === 'Enter' && codeValid) void handleJoin(); }}
               placeholder="ABC123"
-              aria-label="Código de partida"
+              aria-label={t('online.codeLabel')}
               className="flex-1 h-12 rounded-md bg-[hsl(220,15%,12%)] border border-cyan-900/40 text-center font-display text-xl tracking-[0.4em] text-cyan-100 placeholder:text-cyan-200/15 focus:outline-none focus:border-cyan-400/60"
             />
             <button
@@ -206,12 +223,12 @@ export default function OnlinePage() {
               onClick={handleJoin}
               className="h-12 px-5 font-display text-sm tracking-wider rounded-md bg-emerald-600/70 text-white border border-emerald-400/30 disabled:opacity-40 disabled:cursor-not-allowed"
             >
-              UNIRSE
+              {t('online.join')}
             </button>
           </div>
         </section>
 
-        {error && <p role="alert" className="text-xs text-red-300 font-body">⚠️ {error}</p>}
+        {error && <p role="alert" className="text-xs text-red-300 font-body">⚠️ {ERROR_KEYS[error] ? t(ERROR_KEYS[error]) : error}</p>}
       </motion.div>
     </div>
   );

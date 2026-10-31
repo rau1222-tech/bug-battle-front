@@ -2,6 +2,7 @@ import { useState } from 'react';
 import type { CardType, SkillActionType } from '@/constants';
 import { supabase } from '@/integrations/supabase/client';
 import { RARITY_GACHA_WEIGHT, type Rarity } from '@/hooks/useCollection';
+import { t } from '@/i18n';
 
 const CARD_IMAGES_BUCKET = 'card-images';
 
@@ -56,16 +57,16 @@ export function useCardCreate() {
     const nombre = input.nombre.trim();
     const descripcion = input.descripcion.trim();
 
-    if (!nombre) throw new Error('El nombre es obligatorio');
-    if (input.coste < 0) throw new Error('El coste no puede ser negativo');
+    if (!nombre) throw new Error(t('cards.error.nameRequired'));
+    if (input.coste < 0) throw new Error(t('cards.error.costNegative'));
 
     if (input.tipo !== 'consumible') {
-      if ((input.potencia ?? 0) < 0) throw new Error('La potencia no puede ser negativa');
-      if ((input.corduraMax ?? 0) <= 0) throw new Error('La cordura máxima debe ser mayor que 0');
+      if ((input.potencia ?? 0) < 0) throw new Error(t('cards.error.powerNegative'));
+      if ((input.corduraMax ?? 0) <= 0) throw new Error(t('cards.error.maxSanityPositive'));
     }
 
     const hasInvalidSkill = input.habilidades.some((s) => s.skillId === null);
-    if (hasInvalidSkill) throw new Error('Todas las habilidades deben tener una selección válida');
+    if (hasInvalidSkill) throw new Error(t('cards.error.invalidSkill'));
 
     setCreating(true);
     const baseId = slugify(nombre) || 'card';

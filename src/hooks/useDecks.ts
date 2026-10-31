@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { CARD_DEFINITIONS, DECK_SIZE, MAX_COPIES, type CardType } from '@/constants';
+import { t } from '@/i18n';
 
 export interface DeckCardEntry {
   card_id: string;
@@ -39,7 +40,7 @@ export async function setActiveDeckId(userId: string | null | undefined, id: str
     .eq('id', userId)
     .select('id');
   if (error) throw new Error(error.message);
-  if (!data || data.length === 0) throw new Error('No existe el jugador en la tabla players');
+  if (!data || data.length === 0) throw new Error(t('decks.playerMissing'));
 }
 
 const LOCAL_TYPES = new Map<string, CardType>(CARD_DEFINITIONS.map((c) => [c.id, c.tipo]));
@@ -64,6 +65,19 @@ function summarize(
 }
 
 const presetCards = (ids: string[]): DeckCardEntry[] => ids.map((card_id) => ({ card_id, quantity: 2 }));
+
+const PRESET_NAME_KEYS: Record<string, string> = {
+  '00000000-0000-4000-8000-000000000001': 'decks.preset.attack',
+  '00000000-0000-4000-8000-000000000002': 'decks.preset.defense',
+  '00000000-0000-4000-8000-000000000003': 'decks.preset.balance',
+  '00000000-0000-4000-8000-000000000004': 'decks.preset.consumables',
+};
+
+/** Built-in preset names are shown in the current language; user decks keep their own name. */
+export function deckDisplayName(deck: Pick<DeckSummary, 'id' | 'name' | 'is_preset'>): string {
+  const key = deck.is_preset ? PRESET_NAME_KEYS[deck.id] : undefined;
+  return key ? t(key) : deck.name;
+}
 
 /* Fallback presets when Supabase is unreachable; must match supabase/migrations/20261031140000_deck_builder_collection.sql */
 const OFFLINE_PRESETS: DeckSummary[] = [
@@ -141,7 +155,7 @@ export function useDecks(userId: string | null | undefined) {
       setDecks(remoteDecks);
     } catch (err: unknown) {
       if (isStale()) return;
-      const msg = err instanceof Error ? err.message : (err as { message?: string })?.message ?? 'Error de conexión';
+      const msg = err instanceof Error ? err.message : (err as { message?: string })?.message ?? t('decks.connectionError');
       console.warn('Supabase fetch failed, using offline presets:', msg);
       setError(msg);
       setDecks(OFFLINE_PRESETS);
@@ -165,9 +179,9 @@ export async function saveDeckRecord(
   cards: DeckCardEntry[],
 ): Promise<string> {
   const total = cards.reduce((acc, c) => acc + c.quantity, 0);
-  if (total !== DECK_SIZE) throw new Error(`El mazo debe tener exactamente ${DECK_SIZE} cartas`);
+  if (total !== DECK_SIZE) throw new Error(t('decks.deckSizeError', { size: DECK_SIZE }));
   for (const c of cards) {
-    if (c.quantity < 1 || c.quantity > MAX_COPIES) throw new Error(`Máximo ${MAX_COPIES} copias por carta`);
+    if (c.quantity < 1 || c.quantity > MAX_COPIES) throw new Error(t('decks.maxCopies', { max: MAX_COPIES }));
   }
 
   const { data, error } = await supabase.rpc('save_deck', {
@@ -188,7 +202,7 @@ export async function deleteDeckRecord(deckId: string) {
 export async function duplicateDeck(source: DeckSummary, newName?: string) {
   return saveDeckRecord(
     null,
-    newName ?? `${source.name} (copia)`.slice(0, 40),
+    newName ?? t('decks.copyName', { name: deckDisplayName(source) }).slice(0, 40),
     source.cover_emoji,
     source.cards,
   );

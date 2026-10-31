@@ -2,12 +2,14 @@ import { useEffect, useRef, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { ChevronDown, ChevronUp, ScrollText, X } from 'lucide-react';
 import { useIsMobile } from '@/hooks/use-mobile';
+import { useI18n } from '@/i18n';
 
 interface ActionLogProps {
   entries: { id: number; text: string }[];
 }
 
 export default function ActionLog({ entries }: ActionLogProps) {
+  const { t } = useI18n();
   const isMobile = useIsMobile();
   const scrollRef = useRef<HTMLDivElement>(null);
   const [expanded, setExpanded] = useState(!isMobile);
@@ -27,11 +29,11 @@ export default function ActionLog({ entries }: ActionLogProps) {
         <button
           onClick={() => setExpanded(true)}
           className="absolute bottom-[23%] left-2 z-20 flex items-center gap-1.5 px-2.5 py-1.5 rounded-full bg-black/60 backdrop-blur-sm border border-amber-900/40 shadow-lg shadow-black/40 active:scale-95 transition-transform"
-          aria-label="Abrir registro"
+          aria-label={t('game.log.open')}
         >
           <ScrollText className="w-3.5 h-3.5 text-amber-300/80" />
           <span className="text-[10px] font-display tracking-[0.15em] text-amber-200/80 uppercase">
-            Log
+            {t('game.log.short')}
           </span>
           {entries.length > 0 && (
             <span className="text-[9px] font-body text-amber-100/60 bg-amber-900/40 rounded-full px-1.5 py-px min-w-[16px] text-center">
@@ -62,7 +64,7 @@ export default function ActionLog({ entries }: ActionLogProps) {
                   <div className="flex items-center gap-2">
                     <ScrollText className="w-4 h-4 text-amber-300/80" />
                     <span className="text-sm font-display tracking-[0.2em] text-amber-200 uppercase">
-                      Registro
+                      {t('game.log.title')}
                     </span>
                     <span className="text-[10px] font-body text-amber-200/50">
                       ({entries.length})
@@ -71,7 +73,7 @@ export default function ActionLog({ entries }: ActionLogProps) {
                   <button
                     onClick={() => setExpanded(false)}
                     className="p-1.5 rounded-md hover:bg-amber-900/30 active:bg-amber-900/50 transition-colors"
-                    aria-label="Cerrar registro"
+                    aria-label={t('game.log.close')}
                   >
                     <X className="w-5 h-5 text-amber-200/80" />
                   </button>
@@ -82,7 +84,7 @@ export default function ActionLog({ entries }: ActionLogProps) {
                 >
                   {entries.length === 0 ? (
                     <div className="text-xs font-body text-amber-200/40 italic text-center mt-8">
-                      Sin acciones aún…
+                      {t('game.log.empty')}
                     </div>
                   ) : (
                     entries.map((entry, i) => {
@@ -121,7 +123,7 @@ export default function ActionLog({ entries }: ActionLogProps) {
           <div className="flex items-center gap-1.5">
             <ScrollText className="w-3 h-3 text-amber-300/70" />
             <span className="text-[10px] font-display text-amber-300/70 tracking-[0.2em] uppercase">
-              Registro
+              {t('game.log.title')}
             </span>
             <span className="text-[9px] font-body text-amber-200/40">
               ({entries.length})
@@ -168,7 +170,7 @@ export default function ActionLog({ entries }: ActionLogProps) {
                 </AnimatePresence>
                 {entries.length === 0 && (
                   <div className="text-[11px] font-body text-amber-200/40 italic">
-                    Sin acciones aún…
+                    {t('game.log.empty')}
                   </div>
                 )}
               </div>
