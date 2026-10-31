@@ -4,14 +4,21 @@
 
 Una partida consta de **3 rondas** (best of 3). Cada ronda tiene un **Bug** con 10 puntos de complejidad. El primer jugador (o bot) en reducirla a 0 gana el punto de esa ronda. Cuando un jugador acumula 2 puntos, gana la partida.
 
+- Quien empieza la primera ronda se sortea; cada ronda siguiente la empieza quien perdió la anterior.
+- **Límite de turnos**: tras 30 turnos (sumando ambos jugadores) la ronda la gana quien más daño haya hecho al Bug; en empate, quien no empezó la ronda.
+- **Online**: cada turno dura 90 s (la pausa entre rondas 10 s); al agotarse, el turno pasa solo. 3 turnos agotados seguidos = derrota.
+- **Recompensas**: 150 🪙 al ganador y 50 🪙 al perdedor. Contra el bot, máximo 800 🪙 por día (UTC). Abandonar no da oro.
+- **Online aleatorio**: desde la pantalla online se puede buscar un rival aleatorio con el mazo elegido.
+
 ---
 
 ## Conceptos clave
 
 ### Energía ⚡
 
-- Cada turno se reciben **3⚡** de energía.
-- **Bonus**: si fuiste el último en golpear al Bug, recibes **+1⚡** extra.
+- Cada turno se reciben **3⚡** de energía; la sobrante se acumula hasta un máximo de **10⚡**.
+- El segundo jugador empieza con 0⚡, así ambos abren con 3⚡ (como compensación, el segundo roba en su primer turno).
+- **Bonus**: si golpeaste al Bug con un ataque en tu turno, recibes **+1⚡** extra al empezar tu siguiente turno (una sola vez).
 - La energía se gasta al:
   - **Colocar una carta** de la mano al tablero → gasta el `coste` de invocación de la carta.
   - **Atacar con una carta** → gasta el `ataqueCoste` de la carta.
@@ -34,11 +41,13 @@ Una partida consta de **3 rondas** (best of 3). Cada ronda tiene un **Bug** con 
 
 ### Turno del bot
 
-1. Roba carta y gana energía (igual que el jugador).
-2. Coloca cartas de la mano en slots vacíos (prioriza las más baratas).
-3. Si tiene cartas QA y el jugador tiene programadores en mesa (y la complejidad del bug > 3), usa la habilidad QA para devolver al mejor programador rival a su mano.
-4. Ataca al bug con un programador disponible (elige según la complejidad restante).
-5. Pasa turno al jugador.
+El bot usa el mismo motor que el online (`supabase/functions/_shared/engine.ts`) con un mazo aleatorio propio, y en cada paso elige la primera acción legal por prioridad (`src/game/botAI.ts`):
+
+1. Rematar al Bug si puede (ataque, habilidad o consumible).
+2. Colocar cartas guardando energía para atacar.
+3. QA: devolver al mejor programador rival o atacar la carta más vulnerable.
+4. Buffs sobre su mejor atacante, habilidades de daño directo y ataques con todos sus programadores.
+5. Curar aliados, gastar consumibles de daño y pasar turno.
 
 ---
 
@@ -117,7 +126,7 @@ Las habilidades están definidas en un catálogo centralizado (`SKILLS`). Cada c
 | ID | Nombre | Objetivo | Efecto | Duración |
 |---|---|---|---|---|
 | 3 | Par Programming | `carta_aliada` | Buff de ataque: suma `potencia` a la potencia efectiva del aliado | 1 turno |
-| 4 | QA Testing | `carta_enemiga` | Devuelve una carta enemiga a la mano del rival | Inmediato (0) |
+| 4 | QA Testing | `carta_enemiga` | Devuelve una carta enemiga (como nueva) a la mano del rival; si su mano está llena, se descarta | Inmediato (0) |
 | 5 | Automatización | `bug` | Inflige daño directo al bug igual a la `potencia` de la tupla | Inmediato (0) |
 | 6 | Cafeína | `carta_aliada` | Restaura `potencia` puntos de cordura a un aliado | Inmediato (0) |
 | 7 | Motivación | `carta_aliada` | Buff de ataque: suma `potencia` a la potencia efectiva del aliado | Configurable |
@@ -144,7 +153,7 @@ Las habilidades están definidas en un catálogo centralizado (`SKILLS`). Cada c
 | Fullstack ⚡ | Programador | 2 | 2 | 1 | 3 | Par Programming (pot:1, coste:1, dur:1) |
 | DevOps 🔧 | Programador | 1 | 1 | 1 | 2 | Automatización (pot:2, coste:2, dur:0) |
 | Intern 🎒 | Programador | 1 | 1 | 1 | 2 | — |
-| Architect 🏗️ | Programador | 3 | 2 | 0 | 5 | Par Programming (pot:3, coste:0, dur:1) |
+| Architect 🏗️ | Programador | 2 | 3 | 1 | 5 | Par Programming (pot:3, coste:1, dur:1) |
 
 ### QA
 

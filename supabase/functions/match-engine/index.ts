@@ -1,11 +1,15 @@
 import { createClient, type SupabaseClient } from 'npm:@supabase/supabase-js@2';
 import {
+  ROUND_END_SECONDS,
+  TURN_SECONDS,
   applyAction,
   initMatch,
   matchWinner,
+  other,
   parseAction,
   redactFor,
   type DeckEntry,
+  type MatchAction,
   type MatchState,
   type Side,
 } from '../_shared/engine.ts';
@@ -16,8 +20,8 @@ const corsHeaders = {
   'Access-Control-Allow-Methods': 'POST, OPTIONS',
 };
 
-const json = (body: unknown, status = 200) =>
-  new Response(JSON.stringify(body), { status, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+const json = (body: Record<string, unknown>, status = 200) =>
+  new Response(JSON.stringify({ ...body, serverNow: Date.now() }), { status, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
 
 interface MatchRow {
   id: string;
@@ -36,6 +40,8 @@ interface StateRow {
 }
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+/** Consecutive timed-out turns after which a player loses the match. */
+const AFK_FORFEIT_TURNS = 3;
 
 async function loadState(admin: SupabaseClient, matchId: string): Promise<StateRow | null> {
   const { data, error } = await admin.from('match_states').select('state, version').eq('match_id', matchId).maybeSingle();
@@ -61,11 +67,14 @@ async function loadOrInit(admin: SupabaseClient, match: MatchRow): Promise<State
   if (existing) return existing;
 
   const seed = crypto.getRandomValues(new Uint32Array(1))[0] >>> 1;
-  const state = initMatch(
-    seed,
-    { p1: match.host_deck, p2: match.guest_deck ?? [] },
-    { p1: match.host_name, p2: match.guest_name ?? 'Rival' },
-  );
+  const state: MatchState = {
+    ...initMatch(
+      seed,
+      { p1: match.host_deck, p2: match.guest_deck ?? [] },
+      { p1: match.host_name, p2: match.guest_name ?? 'Rival' },
+    ),
+    turnStartedAt: Date.now(),
+  };
   // Both players may hit this at once: first insert wins
   const { error } = await admin.from('match_states').upsert(
     { match_id: match.id, state, version: 0 },
@@ -74,7 +83,21 @@ async function loadOrInit(admin: SupabaseClient, match: MatchRow): Promise<State
   if (error) throw error;
   const row = (await loadState(admin, match.id))!;
   await publishViews(admin, match, row.state, row.version);
+  await admin.from('matches').update({ current_turn: row.state.turn, updated_at: new Date().toISOString() }).eq('id', match.id).eq('status', 'active');
   return row;
+}
+
+/** The action a timeout claim triggers, or null if the current turn/pause hasn't expired. */
+function timeoutAction(state: MatchState, claimer: Side): MatchAction | null {
+  if (state.gamePhase === 'game-over' || !state.turnStartedAt) return null;
+  const limit = (state.gamePhase === 'round-end' ? ROUND_END_SECONDS : TURN_SECONDS) * 1000;
+  if (Date.now() < state.turnStartedAt + limit) return null;
+  return state.gamePhase === 'round-end' ? { type: 'NEXT_ROUND', side: claimer } : { type: 'END_TURN', side: state.turn };
+}
+
+function stampTurnClock(prev: MatchState, next: MatchState): MatchState {
+  const changed = prev.turn !== next.turn || prev.gamePhase !== next.gamePhase || prev.roundNumber !== next.roundNumber;
+  return changed ? { ...next, turnStartedAt: Date.now() } : next;
 }
 
 Deno.serve(async (req) => {
@@ -112,45 +135,52 @@ Deno.serve(async (req) => {
 
     let row = await loadOrInit(admin, match);
 
-    if (body?.op !== 'action' || match.status !== 'active') {
+    const op = body?.op;
+    if ((op !== 'action' && op !== 'timeout') || match.status !== 'active') {
       return json({ status: match.status, view: redactFor(row.state, side), version: row.version });
     }
 
-    const action = parseAction(body.action, side);
-    if (!action) return json({ status: match.status, error: 'Acción no válida', view: redactFor(row.state, side), version: row.version });
+    let playerAction: MatchAction | null = null;
+    if (op === 'action') {
+      playerAction = parseAction(body.action, side);
+      if (!playerAction) return json({ status: match.status, error: 'Acción no válida', view: redactFor(row.state, side), version: row.version });
+    }
 
     for (let attempt = 0; attempt < 3; attempt++) {
+      const action = playerAction ?? timeoutAction(row.state, side);
+      if (!action) return json({ status: match.status, view: redactFor(row.state, side), version: row.version });
+
       const result = applyAction(row.state, action);
       if (result.error) {
         return json({ status: match.status, error: result.error, view: redactFor(row.state, side), version: row.version });
       }
 
+      const idle = op === 'timeout' && action.type === 'END_TURN' ? action.side : null;
+      const afk = { ...(row.state.afk ?? {}) };
+      if (idle) afk[idle] = (afk[idle] ?? 0) + 1;
+      else if (op === 'action') afk[side] = 0;
+      const next = { ...stampTurnClock(row.state, result.state), afk };
       const version = row.version + 1;
-      const { data: saved, error: sErr } = await admin
-        .from('match_states')
-        .update({ state: result.state, version, updated_at: new Date().toISOString() })
-        .eq('match_id', match.id)
-        .eq('version', row.version)
-        .select('version');
-      if (sErr) throw sErr;
+      const forfeit = idle && (afk[idle] ?? 0) >= AFK_FORFEIT_TURNS ? other(idle) : null;
+      const winner = matchWinner(next) ?? forfeit;
+      // State, both views, the action log and the result are committed in one transaction
+      const { data: outcome, error: cErr } = await admin.rpc('commit_match_action', {
+        p_match_id: match.id,
+        p_version: version,
+        p_state: next,
+        p_view_p1: redactFor(next, 'p1'),
+        p_view_p2: redactFor(next, 'p2'),
+        p_turn: next.turn,
+        p_player: user.id,
+        p_action: { ...action, timeout: op === 'timeout' },
+        p_winner: winner,
+      });
+      if (cErr) throw cErr;
 
-      if (saved && saved.length === 1) {
-        await publishViews(admin, match, result.state, version);
-        await admin
-          .from('matches')
-          .update({ current_turn: result.state.turn, last_seq: version, updated_at: new Date().toISOString() })
-          .eq('id', match.id)
-          .eq('status', 'active');
-        await admin.from('match_actions').insert({ match_id: match.id, seq: version, player_id: user.id, action });
-
-        let status = match.status;
-        const winner = matchWinner(result.state);
-        if (winner) {
-          const { data: finished, error: fErr } = await admin.rpc('finish_match_server', { p_match_id: match.id, p_winner: winner });
-          if (fErr) throw fErr;
-          status = finished as string;
-        }
-        return json({ status, view: redactFor(result.state, side), version });
+      if (outcome !== 'conflict') {
+        const status = outcome === 'inactive' ? 'abandoned' : (outcome as string);
+        if (outcome === 'inactive') return json({ status, view: redactFor(row.state, side), version: row.version });
+        return json({ status, view: redactFor(next, side), version });
       }
 
       // Lost an optimistic-concurrency race: reload and retry

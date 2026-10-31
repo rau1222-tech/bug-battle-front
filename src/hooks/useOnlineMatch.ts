@@ -1,9 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { FunctionsHttpError, type RealtimeChannel } from '@supabase/supabase-js';
 import { supabase } from '@/integrations/supabase/client';
-import { CARD_DEFINITIONS, type CardInstance } from '@/constants';
-import type { GameController } from '@/hooks/useGameLogic';
-import type { EngineCard, MatchAction, MatchView, Side } from '@/game/onlineEngine';
+import { useMatchController, type ActionInput } from '@/hooks/useMatchController';
+import { ROUND_END_SECONDS, TURN_SECONDS, type MatchView, type Side } from '@/game/onlineEngine';
 
 export interface MatchInfo {
   id: string;
@@ -21,6 +20,7 @@ interface EngineResponse {
   view: MatchView | null;
   version: number;
   error?: string;
+  serverNow?: number;
 }
 
 const MATCH_COLUMNS = 'id, code, status, host_id, guest_id, host_name, guest_name, winner_id';
@@ -43,40 +43,39 @@ export async function leaveMatch(matchId: string): Promise<string> {
   return data;
 }
 
-const DEFS = new Map(CARD_DEFINITIONS.map((d) => [d.id, d]));
+/** Joins the random queue; returns a match id once paired, null while still waiting (poll again). */
+export async function findRandomMatch(deckId: string): Promise<string | null> {
+  const { data, error } = await supabase.rpc('find_random_match', { p_deck_id: deckId });
+  if (error) throw new Error(error.message);
+  return (data as string | null) ?? null;
+}
 
-/** Server cards carry rules only; restore local art/audio for rendering. */
-const hydrate = (card: EngineCard): CardInstance => ({ ...card, definition: DEFS.get(card.definition.id) ?? card.definition });
-const hydrateTable = (table: (EngineCard | null)[]) => table.map((c) => (c ? hydrate(c) : null));
-
-const HIDDEN_CARD = (i: number): CardInstance => ({
-  instanceId: `hidden-${i}`,
-  definition: CARD_DEFINITIONS[0],
-  cordura: 0,
-  efectosActivos: [],
-  disponible: false,
-});
-const hidden = (n: number) => Array.from({ length: n }, (_, i) => HIDDEN_CARD(i));
-
-type ActionInput = MatchAction extends infer A ? (A extends MatchAction ? Omit<A, 'side'> : never) : never;
+/** Leaves the random queue; returns a match id if a pairing happened just before cancelling. */
+export async function cancelRandomMatch(): Promise<string | null> {
+  const { data, error } = await supabase.rpc('cancel_random_match');
+  if (error) throw new Error(error.message);
+  return (data as string | null) ?? null;
+}
 
 export function useOnlineMatch(matchId: string, userId: string) {
   const [match, setMatch] = useState<MatchInfo | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
-  const [view, setView] = useState<MatchView | null>(null);
-  const [localMessage, setLocalMessage] = useState<string | null>(null);
+  const [snap, setSnap] = useState<{ view: MatchView; version: number } | null>(null);
+  const [localMessage, setLocalMessage] = useState<{ text: string; key: number } | null>(null);
   const [opponentOnline, setOpponentOnline] = useState<boolean | null>(null);
-  const [highlightId, setHighlightId] = useState<string | null>(null);
-  const [bugHit, setBugHit] = useState(false);
+  const [pending, setPending] = useState(0);
+  /** serverNow - clientNow, so server timestamps can be shown on the local clock */
+  const [clockOffset, setClockOffset] = useState(0);
 
   const versionRef = useRef(-1);
   const statusRef = useRef<string | null>(null);
   const chainRef = useRef<Promise<void>>(Promise.resolve());
+  const errorKeyRef = useRef(0);
 
   const acceptView = useCallback((next: MatchView | null | undefined, version: number) => {
     if (!next || version <= versionRef.current) return;
     versionRef.current = version;
-    setView(next);
+    setSnap({ view: next, version });
     setLocalMessage(null);
   }, []);
 
@@ -93,6 +92,7 @@ export function useOnlineMatch(matchId: string, userId: string) {
       }
       throw new Error(message);
     }
+    if (typeof data?.serverNow === 'number') setClockOffset(data.serverNow - Date.now());
     return data!;
   }, [matchId]);
 
@@ -109,6 +109,10 @@ export function useOnlineMatch(matchId: string, userId: string) {
     const { data: own } = await supabase.from('match_views').select('view, version').eq('match_id', matchId).maybeSingle();
     if (own) {
       acceptView(own.view as unknown as MatchView, own.version);
+      // Also syncs the clock offset used by the turn timer
+      callEngine({ op: 'state' }).then((r) => acceptView(r.view, r.version)).catch(() => {
+        // The realtime view is already shown; nothing else to do
+      });
       return;
     }
     // First visit after the guest joined: the server creates the state
@@ -151,82 +155,69 @@ export function useOnlineMatch(matchId: string, userId: string) {
     };
   }, [matchId, userId, load, acceptView]);
 
+  const view = snap?.view ?? null;
+  const version = snap?.version ?? -1;
+  const status = match?.status;
   const you: Side = view?.you ?? (match?.host_id === userId ? 'p1' : 'p2');
-  const foe: Side = you === 'p1' ? 'p2' : 'p1';
 
-  useEffect(() => {
-    const last = view?.lastAction;
-    if (!last || last.side === you || !last.cardId) return;
-    setHighlightId(last.cardId);
-    const t = setTimeout(() => setHighlightId(null), 900);
-    return () => clearTimeout(t);
-  }, [view, you]);
-
-  const hp = view?.bugComplexity ?? 0;
-  const prevHpRef = useRef(hp);
-  useEffect(() => {
-    const prev = prevHpRef.current;
-    prevHpRef.current = hp;
-    if (hp < prev && hp > 0) {
-      setBugHit(true);
-      const t = setTimeout(() => setBugHit(false), 400);
-      return () => clearTimeout(t);
-    }
-  }, [hp]);
+  const showError = useCallback((text: string) => {
+    errorKeyRef.current += 1;
+    setLocalMessage({ text: `⚠️ ${text.replace(/^⚠️\s*/, '')}`, key: errorKeyRef.current });
+  }, []);
 
   const dispatch = useCallback((action: ActionInput) => {
+    setPending((n) => n + 1);
     // Sequential so actions reach the server in the order they were made
     chainRef.current = chainRef.current.then(async () => {
       try {
         const r = await callEngine({ op: 'action', action });
         acceptView(r.view, r.version);
-        if (r.error) setLocalMessage(`⚠️ ${r.error.replace(/^⚠️\s*/, '')}`);
+        if (r.error) showError(r.error);
       } catch (e) {
-        setLocalMessage(`⚠️ ${e instanceof Error ? e.message : 'Error de conexión'}`);
+        showError(e instanceof Error ? e.message : 'Error de conexión');
+      } finally {
+        setPending((n) => n - 1);
       }
     });
-  }, [callEngine, acceptView]);
+  }, [callEngine, acceptView, showError]);
 
-  const game = useMemo<GameController | null>(() => {
-    if (!view) return null;
-    const me = view.sides[you];
-    const opp = view.sides[foe];
-    const toView = (side: Side | null) => (side === null ? null : side === you ? 'player' : 'bot');
-    return {
-      bugComplexity: view.bugComplexity,
-      bugState: view.bugComplexity === 0 ? 'death' : bugHit ? 'hit' : 'idle',
-      playerHand: (me.hand ?? []).map(hydrate),
-      playerTable: hydrateTable(me.table),
-      playerDeck: hidden(me.deckCount),
-      botHand: hidden(opp.handCount),
-      botTable: hydrateTable(opp.table),
-      botDeck: hidden(opp.deckCount),
-      playerScore: me.score,
-      botScore: opp.score,
-      roundNumber: view.roundNumber,
-      gamePhase: view.gamePhase,
-      turn: toView(view.turn)!,
-      lastAttacker: toView(view.lastAttacker),
-      message: localMessage ?? view.message,
-      isFirstTurn: view.isFirstTurn,
-      botHighlightId: highlightId,
-      playerTargetHighlightId: null,
-      playerEnergy: me.energy,
-      botEnergy: opp.energy,
-      playerMaxEnergy: me.maxEnergy,
-      botMaxEnergy: opp.maxEnergy,
-      playerTurnCount: me.turnCount,
-      botTurnCount: opp.turnCount,
-      playCardToTable: (cardId: string, slot: number) => dispatch({ type: 'PLACE_CARD', cardId, slot }),
-      playerAttackBug: (cardId: string) => dispatch({ type: 'ATTACK_BUG', cardId }),
-      playerAttackEnemy: (attackerId: string, targetId: string) => dispatch({ type: 'ATTACK_CARD', attackerId, targetId }),
-      playerUseSkill: (cardId: string, skillIndex: number, targetId?: string) => dispatch({ type: 'USE_SKILL', cardId, skillIndex, targetId }),
-      playerUseConsumable: (cardId: string, targetId?: string) => dispatch({ type: 'USE_CONSUMABLE', cardId, targetId }),
-      skipTurn: () => dispatch({ type: 'END_TURN' }),
-      startNewRound: () => dispatch({ type: 'NEXT_ROUND' }),
-      restartGame: () => {},
+  const turnDeadline = useMemo(() => {
+    if (!view || !view.turnStartedAt || view.gamePhase === 'game-over') return null;
+    const seconds = view.gamePhase === 'round-end' ? ROUND_END_SECONDS : TURN_SECONDS;
+    return view.turnStartedAt + seconds * 1000 - clockOffset;
+  }, [view, clockOffset]);
+
+  // Once the turn (or round-end pause) expires, ask the server to advance it; it re-checks the clock itself
+  useEffect(() => {
+    if (turnDeadline === null || status !== 'active') return;
+    let interval: ReturnType<typeof setInterval> | undefined;
+    const claim = () => {
+      callEngine({ op: 'timeout' })
+        .then((r) => acceptView(r.view, r.version))
+        .catch(() => {
+          // Transient failure: the interval retries
+        });
     };
-  }, [view, you, foe, bugHit, localMessage, highlightId, dispatch]);
+    const t = setTimeout(() => {
+      claim();
+      interval = setInterval(claim, 5000);
+    }, Math.max(0, turnDeadline - Date.now() + 1500));
+    return () => {
+      clearTimeout(t);
+      if (interval) clearInterval(interval);
+    };
+  }, [turnDeadline, status, callEngine, acceptView]);
+
+  const noop = useCallback(() => {}, []);
+  const game = useMatchController(view, {
+    version,
+    message: localMessage?.text ?? null,
+    messageKey: localMessage ? `e-${version}-${localMessage.key}` : `v-${version}`,
+    busy: pending > 0,
+    turnDeadline,
+    dispatch,
+    restart: noop,
+  });
 
   return {
     match,

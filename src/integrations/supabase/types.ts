@@ -339,6 +339,8 @@ export type Database = {
           active_deck_id: string | null
           admin: boolean
           avatar_url: string | null
+          bot_losses: number
+          bot_wins: number
           created_at: string
           display_name: string
           gold: number
@@ -351,6 +353,8 @@ export type Database = {
           active_deck_id?: string | null
           admin?: boolean
           avatar_url?: string | null
+          bot_losses?: number
+          bot_wins?: number
           created_at?: string
           display_name: string
           gold?: number
@@ -363,6 +367,8 @@ export type Database = {
           active_deck_id?: string | null
           admin?: boolean
           avatar_url?: string | null
+          bot_losses?: number
+          bot_wins?: number
           created_at?: string
           display_name?: string
           gold?: number
@@ -417,6 +423,24 @@ export type Database = {
         Args: { p_card_ids: string[]; p_user_id: string }
         Returns: undefined
       }
+      cancel_random_match: {
+        Args: Record<PropertyKey, never>
+        Returns: string | null
+      }
+      commit_match_action: {
+        Args: {
+          p_action: Json
+          p_match_id: string
+          p_player: string
+          p_state: Json
+          p_turn: string
+          p_version: number
+          p_view_p1: Json
+          p_view_p2: Json
+          p_winner: string | null
+        }
+        Returns: string
+      }
       create_match: {
         Args: { p_deck_id: string }
         Returns: Json
@@ -429,6 +453,10 @@ export type Database = {
         Args: { p_match_id: string; p_winner: string }
         Returns: string
       }
+      find_random_match: {
+        Args: { p_deck_id: string }
+        Returns: string | null
+      }
       join_match: {
         Args: { p_code: string; p_deck_id: string }
         Returns: string
@@ -440,6 +468,10 @@ export type Database = {
       open_pack: {
         Args: Record<PropertyKey, never>
         Returns: Json
+      }
+      record_bot_result: {
+        Args: { p_won: boolean }
+        Returns: number
       }
       report_match_result: {
         Args: { p_match_id: string; p_winner: string }

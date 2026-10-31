@@ -2,7 +2,8 @@ import { useState, useCallback, useRef, useEffect, type ReactNode } from 'react'
 import { motion, AnimatePresence } from 'framer-motion';
 import { useGameLogic, type GameController } from '@/hooks/useGameLogic';
 import { useGameStats } from '@/hooks/useGameStats';
-import { TABLE_MAX, SKILLS } from '@/constants';
+import { TABLE_MAX, SKILLS, CARD_DEFINITIONS, calcularPotenciaReal } from '@/constants';
+import { MAX_ROUND_TURNS } from '@/game/onlineEngine';
 import BugCentral from './BugCentral';
 import GameCard from './GameCard';
 import ActionMenu from './ActionMenu';
@@ -27,8 +28,11 @@ type SelectionPhase =
 
 type ConsumableDropTarget = 'bug' | 'carta_aliada' | 'carta_enemiga';
 
+const AUDIO_BY_CARD = new Map(CARD_DEFINITIONS.map((d) => [d.id, d.audio]));
+const ONLINE_REWARD = { win: 150, loss: 50 };
+
 export default function GameBoard({ deckComposition, ...rest }: GameBoardProps) {
-  const game = useGameLogic(deckComposition);
+  const game = useGameLogic(deckComposition, rest.playerName);
   return <GameBoardView game={game} {...rest} />;
 }
 
@@ -47,8 +51,12 @@ interface GameBoardViewProps {
 export function GameBoardView({ game, onExit, playerId, playerName = 'Jugador', opponentName, online = false, banner }: GameBoardViewProps) {
   const { recordResult } = useGameStats(playerId);
   const isPlayerTurn = game.turn === 'player';
+  /** Input is ignored while an online action is in flight */
+  const canAct = isPlayerTurn && !game.busy;
   const [selection, setSelection] = useState<SelectionPhase>({ type: 'none' });
   const [showExitConfirm, setShowExitConfirm] = useState(false);
+  const [reward, setReward] = useState<number | null>(null);
+  const [now, setNow] = useState(() => Date.now());
   const tableRef = useRef<HTMLDivElement>(null);
 
   // Drag state (pointer-based — works for mouse + touch)
@@ -61,44 +69,52 @@ export function GameBoardView({ game, onExit, playerId, playerName = 'Jugador', 
   const dragOverSlotRef = useRef<number | null>(null);
   const draggingConsumableTargetRef = useRef<ConsumableDropTarget | null>(null);
   const dragOverTargetIdRef = useRef<string | 'bug' | null>(null);
-  const prevBotTableIdsRef = useRef<string[]>([]);
   const gameOverRecordedRef = useRef(false);
 
-  // Action log — accumulates every game.message change
+  // Action log — one entry per message key, so repeated texts are still logged
   const [logEntries, setLogEntries] = useState<{ id: number; text: string }[]>([]);
-  const lastMessageRef = useRef<string | null>(null);
+  const lastMessageKeyRef = useRef<string | null>(null);
   const logIdRef = useRef(0);
 
   useEffect(() => {
     if (!game.message) return;
-    if (lastMessageRef.current === game.message) return;
-    lastMessageRef.current = game.message;
+    if (lastMessageKeyRef.current === game.messageKey) return;
+    lastMessageKeyRef.current = game.messageKey;
     logIdRef.current += 1;
     const id = logIdRef.current;
     setLogEntries((prev) => {
       const next = [...prev, { id, text: game.message }];
       return next.length > 50 ? next.slice(next.length - 50) : next;
     });
-  }, [game.message]);
+  }, [game.message, game.messageKey]);
 
   useEffect(() => {
     if (game.gamePhase !== 'game-over') {
       gameOverRecordedRef.current = false;
+      setReward(null);
       return;
     }
     if (gameOverRecordedRef.current) return;
 
     gameOverRecordedRef.current = true;
-    const result = game.playerScore > game.botScore
-      ? 'win'
-      : game.playerScore < game.botScore
-        ? 'loss'
-        : 'draw';
+    const result = game.playerScore > game.botScore ? 'win' : 'loss';
+    if (online) {
+      setReward(ONLINE_REWARD[result]);
+      return;
+    }
+    recordResult(result)
+      .then((gold) => setReward(gold))
+      .catch((err) => {
+        console.error('Failed to persist game result:', err);
+      });
+  }, [game.gamePhase, game.playerScore, game.botScore, recordResult, online]);
 
-    void recordResult(result).catch((err) => {
-      console.error('Failed to persist game result:', err);
-    });
-  }, [game.gamePhase, game.playerScore, game.botScore, recordResult]);
+  useEffect(() => {
+    if (game.turnDeadline === null) return;
+    const t = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(t);
+  }, [game.turnDeadline]);
+  const secondsLeft = game.turnDeadline === null ? null : Math.max(0, Math.ceil((game.turnDeadline - now) / 1000));
 
   const playCardAudio = useCallback((audioSrc?: string) => {
     if (!audioSrc) return;
@@ -111,17 +127,15 @@ export function GameBoardView({ game, onExit, playerId, playerName = 'Jugador', 
     }
   }, []);
 
+  // Sound only for actions the engine accepted (both sides)
+  const lastActionKeyRef = useRef(game.actionKey);
   useEffect(() => {
-    const previousIds = prevBotTableIdsRef.current;
-    const currentIds = game.botTable.filter((card): card is NonNullable<typeof card> => card !== null).map((card) => card.instanceId);
-
-    const addedBotCard = game.botTable.find((card) => card !== null && !previousIds.includes(card.instanceId));
-    if (addedBotCard) {
-      playCardAudio(addedBotCard.definition.audio);
-    }
-
-    prevBotTableIdsRef.current = currentIds;
-  }, [game.botTable, playCardAudio]);
+    if (lastActionKeyRef.current === game.actionKey) return;
+    lastActionKeyRef.current = game.actionKey;
+    const la = game.lastAction;
+    if (!la?.defId || (la.type !== 'PLACE_CARD' && la.type !== 'USE_CONSUMABLE')) return;
+    playCardAudio(AUDIO_BY_CARD.get(la.defId));
+  }, [game.actionKey, game.lastAction, playCardAudio]);
 
   const draggingCard = draggingCardId
     ? game.playerHand.find(c => c.instanceId === draggingCardId) ?? null
@@ -138,14 +152,16 @@ export function GameBoardView({ game, onExit, playerId, playerName = 'Jugador', 
     }
     const actions: { id: string; label: string; description: string }[] = [];
     const def = selectedCard.definition;
-    const hasEnergy = game.playerEnergy >= def.ataqueCoste;
+    const attackCost = def.ataqueCoste ?? 0;
+    const power = calcularPotenciaReal(selectedCard);
+    const hasEnergy = game.playerEnergy >= attackCost;
     // Basic attack — programadores attack bugs, QAs attack enemy cards
-    if (def.potencia > 0) {
+    if (power > 0) {
       if (def.tipo === 'programador') {
         actions.push({
           id: 'attack-bug',
-          label: `⚔️ Atacar Bug (-${def.potencia}❤️, -${def.ataqueCoste}⚡)`,
-          description: hasEnergy ? 'Reduce la complejidad del Bug.' : `⚠️ Necesitas ${def.ataqueCoste}⚡`,
+          label: `⚔️ Atacar Bug (-${power}❤️, -${attackCost}⚡)`,
+          description: hasEnergy ? 'Reduce la complejidad del Bug.' : `⚠️ Necesitas ${attackCost}⚡`,
         });
       }
       if (def.tipo === 'qa') {
@@ -153,8 +169,8 @@ export function GameBoardView({ game, onExit, playerId, playerName = 'Jugador', 
         if (hasEnemies) {
           actions.push({
             id: 'attack-enemy',
-            label: `🎯 Atacar Carta Enemiga (-${def.ataqueCoste}⚡)`,
-            description: hasEnergy ? 'Aumenta el estrés de una carta rival.' : `⚠️ Necesitas ${def.ataqueCoste}⚡`,
+            label: `🎯 Atacar Carta Enemiga (-${power}🧠, -${attackCost}⚡)`,
+            description: hasEnergy ? 'Reduce la cordura de una carta rival; a 0 queda destruida.' : `⚠️ Necesitas ${attackCost}⚡`,
           });
         }
       }
@@ -182,15 +198,16 @@ export function GameBoardView({ game, onExit, playerId, playerName = 'Jugador', 
   };
 
   const handleTableCardSelect = useCallback((cardId: string) => {
-    if (!isPlayerTurn || game.gamePhase !== 'playing') return;
+    if (!canAct || game.gamePhase !== 'playing') return;
     if (selection.type === 'card-selected' && selection.cardId === cardId) {
       setSelection({ type: 'none' });
     } else {
       setSelection({ type: 'card-selected', cardId });
     }
-  }, [isPlayerTurn, game.gamePhase, selection]);
+  }, [canAct, game.gamePhase, selection]);
 
   const handleBotCardSelect = useCallback((cardId: string) => {
+    if (!canAct) return;
     if (selection.type === 'picking-enemy') {
       if (selection.actionType === 'attack-enemy') {
         game.playerAttackEnemy(selection.cardId, cardId);
@@ -202,9 +219,10 @@ export function GameBoardView({ game, onExit, playerId, playerName = 'Jugador', 
       game.playerUseConsumable(selection.cardId, cardId);
       setSelection({ type: 'none' });
     }
-  }, [selection, game]);
+  }, [selection, game, canAct]);
 
   const handleAllyCardSelect = useCallback((cardId: string) => {
+    if (!canAct) return;
     if (selection.type === 'picking-ally') {
       game.playerUseSkill(selection.cardId, selection.skillIndex, cardId);
       setSelection({ type: 'none' });
@@ -212,10 +230,10 @@ export function GameBoardView({ game, onExit, playerId, playerName = 'Jugador', 
       game.playerUseConsumable(selection.cardId, cardId);
       setSelection({ type: 'none' });
     }
-  }, [selection, game]);
+  }, [selection, game, canAct]);
 
   const handleAction = useCallback((actionId: string) => {
-    if (!selectedCard) return;
+    if (!selectedCard || game.busy) return;
     if (actionId === 'attack-bug') {
       game.playerAttackBug(selectedCard.instanceId);
       setSelection({ type: 'none' });
@@ -264,22 +282,8 @@ export function GameBoardView({ game, onExit, playerId, playerName = 'Jugador', 
         } else {
           game.playerUseConsumable(cardId, targetId);
         }
-        playCardAudio(card.definition.audio);
       }
     } else if (commit && cardId !== null && slotIdx !== null) {
-      const card = game.playerHand.find((c) => c.instanceId === cardId);
-      const canPlace =
-        game.gamePhase === 'playing'
-        && game.turn === 'player'
-        && slotIdx >= 0
-        && slotIdx < TABLE_MAX
-        && game.playerTable[slotIdx] === null
-        && !!card
-        && game.playerEnergy >= (card?.definition.coste ?? Infinity);
-
-      if (canPlace) {
-        playCardAudio(card.definition.audio);
-      }
       game.playCardToTable(cardId, slotIdx);
     }
     draggingCardIdRef.current = null;
@@ -293,7 +297,7 @@ export function GameBoardView({ game, onExit, playerId, playerName = 'Jugador', 
     setDragPos(null);
     document.body.style.userSelect = '';
     document.body.style.touchAction = '';
-  }, [game, playCardAudio]);
+  }, [game]);
 
   const updateDragOverFromPoint = useCallback((x: number, y: number) => {
     const el = document.elementFromPoint(x, y) as HTMLElement | null;
@@ -338,7 +342,7 @@ export function GameBoardView({ game, onExit, playerId, playerName = 'Jugador', 
   }, []);
 
   const handlePointerDownCard = useCallback((e: React.PointerEvent, cardId: string) => {
-    if (!isPlayerTurn || game.gamePhase !== 'playing') return;
+    if (!canAct || game.gamePhase !== 'playing') return;
     const card = game.playerHand.find((c) => c.instanceId === cardId);
     if (!card) return;
 
@@ -367,7 +371,7 @@ export function GameBoardView({ game, onExit, playerId, playerName = 'Jugador', 
     // Prevent page scroll while dragging on touch
     document.body.style.userSelect = 'none';
     document.body.style.touchAction = 'none';
-  }, [isPlayerTurn, game.gamePhase, game.playerTable, game.playerHand]);
+  }, [canAct, game.gamePhase, game.playerTable, game.playerHand]);
 
   const handlePointerMoveCard = useCallback((e: React.PointerEvent) => {
     if (!draggingCardIdRef.current) return;
@@ -428,11 +432,16 @@ export function GameBoardView({ game, onExit, playerId, playerName = 'Jugador', 
               ? '🎯 OBJETIVO'
               : `🟢 ${playerName.toUpperCase()}`
             : `🔴 ${opponentName ? opponentName.toUpperCase() : 'RIVAL'}`}
+          {secondsLeft !== null && game.gamePhase === 'playing' && (
+            <span className={`ml-2 tabular-nums ${secondsLeft <= 15 ? 'text-red-300 animate-pulse' : 'opacity-70'}`}>⏱{secondsLeft}s</span>
+          )}
         </motion.div>
 
         <div className="flex items-center gap-1.5 sm:gap-4 text-[11px] sm:text-base font-display bg-black/30 backdrop-blur-sm px-2 sm:px-4 py-1 sm:py-1.5 rounded-lg border border-amber-900/30 shrink-0">
           <span className="text-emerald-400">{game.playerScore}</span>
-          <span className="text-amber-200/50 text-[9px] sm:text-xs">R{game.roundNumber}</span>
+          <span className="text-amber-200/50 text-[9px] sm:text-xs" title="Ronda · turnos de la ronda (al límite gana quien más daño haya hecho)">
+            R{game.roundNumber} · T{game.roundTurns}/{MAX_ROUND_TURNS}
+          </span>
           <span className="text-red-400">{game.botScore}</span>
         </div>
       </div>
@@ -518,8 +527,8 @@ export function GameBoardView({ game, onExit, playerId, playerName = 'Jugador', 
 
       {/* ===== DECK ===== */}
       <div className="absolute left-[1%] sm:left-[4%] top-[35%] -translate-y-1/2 z-10 flex flex-col items-center gap-3 sm:gap-8">
-        <DeckPile count={game.botDeck.length} label={opponentName ?? 'BOT'} />
-        <DeckPile count={game.playerDeck.length} label={playerName} />
+        <DeckPile count={game.botDeckCount} label={opponentName ?? 'BOT'} />
+        <DeckPile count={game.playerDeckCount} label={playerName} />
       </div>
 
       {/* ===== Skip turn button — bigger, on right edge of mat ===== */}
@@ -530,7 +539,8 @@ export function GameBoardView({ game, onExit, playerId, playerName = 'Jugador', 
           whileHover={{ scale: 1.05 }}
           whileTap={{ scale: 0.97 }}
           onClick={game.skipTurn}
-          className="absolute right-[1%] sm:right-[2%] top-1/2 -translate-y-1/2 z-30 font-display font-bold text-[10px] sm:text-base tracking-wide
+          disabled={game.busy}
+          className="absolute right-[1%] sm:right-[2%] top-1/2 -translate-y-1/2 z-30 font-display font-bold text-[10px] sm:text-base tracking-wide disabled:opacity-60
             px-2 sm:px-5 py-3 sm:py-6 rounded-xl sm:rounded-2xl
             bg-gradient-to-b from-amber-600/90 to-amber-800/90 text-amber-50
             border-2 border-amber-400/60
@@ -699,7 +709,7 @@ export function GameBoardView({ game, onExit, playerId, playerName = 'Jugador', 
         <div className="flex items-center gap-2">
           {/* Mini stacked cards */}
           <div className="relative w-8 h-11 sm:w-10 sm:h-14">
-            {Array.from({ length: Math.min(game.botHand.length, 3) }).map((_, i) => (
+            {Array.from({ length: Math.min(game.botHandCount, 3) }).map((_, i) => (
               <div
                 key={i}
                 className="absolute rounded-md overflow-hidden border border-amber-900/60 shadow-md"
@@ -722,14 +732,14 @@ export function GameBoardView({ game, onExit, playerId, playerName = 'Jugador', 
           </div>
           {/* Count badge */}
           <motion.div
-            key={game.botHand.length}
+            key={game.botHandCount}
             initial={{ scale: 1.3 }}
             animate={{ scale: 1 }}
             transition={{ type: 'spring', stiffness: 300, damping: 15 }}
             className="flex items-center gap-1.5 bg-black/50 backdrop-blur-sm px-2.5 py-1 rounded-full border border-amber-900/40"
           >
             <span className="text-[9px] sm:text-[10px] font-display text-amber-200/50 uppercase tracking-wider">Rival</span>
-            <span className="text-xs sm:text-sm font-display text-amber-100 font-bold tabular-nums">×{game.botHand.length}</span>
+            <span className="text-xs sm:text-sm font-display text-amber-100 font-bold tabular-nums">×{game.botHandCount}</span>
           </motion.div>
         </div>
       </div>
@@ -776,6 +786,7 @@ export function GameBoardView({ game, onExit, playerId, playerName = 'Jugador', 
                       selected={false}
                       inHand
                       onSelect={card.definition.tipo === 'consumible' ? (cardId) => {
+                        if (!canAct) return;
                         const skill = SKILLS[card.definition.habilidades[0]?.[0]];
                         if (!skill) return;
                         if (skill.objetivo === 'bug') {
@@ -847,6 +858,11 @@ export function GameBoardView({ game, onExit, playerId, playerName = 'Jugador', 
                     {game.playerScore > game.botScore ? '¡VICTORIA!' : game.playerScore < game.botScore ? 'DERROTA' : 'EMPATE'}
                   </h2>
                   <p className="text-xl text-amber-200/60 font-body">{game.playerScore} - {game.botScore}</p>
+                  {reward !== null && (
+                    <p className="mt-3 text-lg font-display text-yellow-300">
+                      {reward > 0 ? `+${reward} 🪙` : online ? '' : 'Límite diario de oro contra el bot alcanzado'}
+                    </p>
+                  )}
                 </>
               ) : (
                 <>
@@ -859,14 +875,14 @@ export function GameBoardView({ game, onExit, playerId, playerName = 'Jugador', 
               )}
             </motion.div>
             <div className="flex flex-col gap-4">
-              {online && game.gamePhase === 'round-end' && !isPlayerTurn ? (
-                <span className="font-display text-amber-200/60 text-sm text-center">Esperando a {opponentName ?? 'tu rival'}…</span>
-              ) : !(online && game.gamePhase === 'game-over') && (
+              {!(online && game.gamePhase === 'game-over') && (
               <button
                 onClick={game.gamePhase === 'game-over' ? game.restartGame : game.startNewRound}
-                className="h-14 px-10 font-display text-base tracking-wide rounded-lg bg-amber-700/80 text-amber-100 hover:bg-amber-600/80 border border-amber-500/30 shadow-[0_0_20px_hsl(35_60%_30%/0.3)] transition-all"
+                disabled={game.busy}
+                className="h-14 px-10 font-display text-base tracking-wide rounded-lg bg-amber-700/80 text-amber-100 hover:bg-amber-600/80 border border-amber-500/30 shadow-[0_0_20px_hsl(35_60%_30%/0.3)] transition-all disabled:opacity-60"
               >
                 {game.gamePhase === 'game-over' ? 'NUEVA PARTIDA' : 'SIGUIENTE RONDA'}
+                {game.gamePhase === 'round-end' && secondsLeft !== null && ` (${secondsLeft}s)`}
               </button>
               )}
               {game.gamePhase === 'game-over' && (

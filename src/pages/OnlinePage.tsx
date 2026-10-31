@@ -1,13 +1,14 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { useAuthContext } from '@/contexts/AuthContext';
 import { getActiveDeckId, useDecks } from '@/hooks/useDecks';
-import { createMatch, joinMatch } from '@/hooks/useOnlineMatch';
+import { cancelRandomMatch, createMatch, findRandomMatch, joinMatch } from '@/hooks/useOnlineMatch';
 import { DECK_SIZE, MAX_COPIES } from '@/constants';
 import { matchPath, ROUTES } from '@/routes';
 
 const CODE_RE = /^[A-HJ-NP-Z2-9]{6}$/;
+const QUEUE_POLL_MS = 2000;
 
 export default function OnlinePage() {
   const navigate = useNavigate();
@@ -18,6 +19,55 @@ export default function OnlinePage() {
   const [code, setCode] = useState(() => (params.get('code') ?? '').toUpperCase());
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [searchStartedAt, setSearchStartedAt] = useState<number | null>(null);
+  const [now, setNow] = useState(() => Date.now());
+  const mountedRef = useRef(true);
+
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+    };
+  }, []);
+
+  const searching = searchStartedAt !== null;
+
+  // Poll the random queue; leaving the queue (cancel/unmount) still follows a pairing made at the last moment
+  useEffect(() => {
+    if (!searching || !deckId) return;
+    let stopped = false;
+    let found = false;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const poll = async () => {
+      try {
+        const id = await findRandomMatch(deckId);
+        if (stopped) return;
+        if (id) {
+          found = true;
+          navigate(matchPath(id));
+          return;
+        }
+        timer = setTimeout(() => void poll(), QUEUE_POLL_MS);
+      } catch (e) {
+        if (stopped) return;
+        setError(e instanceof Error ? e.message : 'Error inesperado');
+        setSearchStartedAt(null);
+      }
+    };
+    void poll();
+    const tick = setInterval(() => setNow(Date.now()), 1000);
+    return () => {
+      stopped = true;
+      clearTimeout(timer);
+      clearInterval(tick);
+      if (found) return;
+      cancelRandomMatch()
+        .then((id) => {
+          if (id && mountedRef.current) navigate(matchPath(id));
+        })
+        .catch((e) => console.error('Failed to leave the queue:', e));
+    };
+  }, [searching, deckId, navigate]);
 
   const validDecks = useMemo(
     () => decks.filter((d) => d.total === DECK_SIZE && d.cards.every((c) => c.quantity <= MAX_COPIES)),
@@ -80,6 +130,7 @@ export default function OnlinePage() {
               {validDecks.map((d) => (
                 <button
                   key={d.id}
+                  disabled={searching}
                   onClick={() => setDeckId(d.id)}
                   className={`h-12 px-3 rounded-md border text-left flex items-center gap-2 transition-colors ${
                     deckId === d.id
@@ -96,9 +147,42 @@ export default function OnlinePage() {
         </section>
 
         <section className="flex flex-col gap-2">
-          <h2 className="text-[10px] font-body text-cyan-400/50 uppercase tracking-widest">2. Crea una partida…</h2>
+          <h2 className="text-[10px] font-body text-cyan-400/50 uppercase tracking-widest">2. Juega contra un rival aleatorio…</h2>
+          {searchStartedAt !== null ? (
+            <div className="h-12 flex items-center justify-between gap-3 rounded-md border border-fuchsia-400/40 bg-fuchsia-500/10 px-3">
+              <motion.span
+                animate={{ opacity: [0.4, 1, 0.4] }}
+                transition={{ duration: 1.6, repeat: Infinity }}
+                className="font-display text-xs tracking-wider text-fuchsia-100"
+              >
+                🔎 BUSCANDO RIVAL… {Math.max(0, Math.floor((now - searchStartedAt) / 1000))}s
+              </motion.span>
+              <button
+                onClick={() => setSearchStartedAt(null)}
+                className="font-display text-xs tracking-wider text-red-300/80 hover:text-red-200"
+              >
+                CANCELAR
+              </button>
+            </div>
+          ) : (
+            <button
+              disabled={!deckId || busy}
+              onClick={() => {
+                setError(null);
+                setNow(Date.now());
+                setSearchStartedAt(Date.now());
+              }}
+              className="h-12 font-display text-sm tracking-wider rounded-md bg-gradient-to-r from-fuchsia-600/80 to-purple-600/80 text-white border border-fuchsia-400/30 disabled:opacity-40 disabled:cursor-not-allowed"
+            >
+              🎲 BUSCAR PARTIDA ALEATORIA
+            </button>
+          )}
+        </section>
+
+        <section className="flex flex-col gap-2">
+          <h2 className="text-[10px] font-body text-cyan-400/50 uppercase tracking-widest">…o crea una partida privada…</h2>
           <button
-            disabled={!deckId || busy}
+            disabled={!deckId || busy || searching}
             onClick={handleCreate}
             className="h-12 font-display text-sm tracking-wider rounded-md bg-gradient-to-r from-cyan-600/80 to-blue-600/80 text-white border border-cyan-400/30 disabled:opacity-40 disabled:cursor-not-allowed"
           >
@@ -118,7 +202,7 @@ export default function OnlinePage() {
               className="flex-1 h-12 rounded-md bg-[hsl(220,15%,12%)] border border-cyan-900/40 text-center font-display text-xl tracking-[0.4em] text-cyan-100 placeholder:text-cyan-200/15 focus:outline-none focus:border-cyan-400/60"
             />
             <button
-              disabled={!deckId || !codeValid || busy}
+              disabled={!deckId || !codeValid || busy || searching}
               onClick={handleJoin}
               className="h-12 px-5 font-display text-sm tracking-wider rounded-md bg-emerald-600/70 text-white border border-emerald-400/30 disabled:opacity-40 disabled:cursor-not-allowed"
             >

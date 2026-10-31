@@ -103,10 +103,10 @@ function MatchScreen({ matchId }: { matchId: string }) {
   }
 
   const rival = opponentName ?? 'Rival';
-  const ended = match.status === 'abandoned' && game.gamePhase !== 'game-over';
+  const ended = (match.status === 'abandoned' || match.status === 'finished') && game.gamePhase !== 'game-over';
   const banner = match.status === 'active' && opponentOnline === false && game.gamePhase !== 'game-over' ? (
     <div className="text-[11px] font-body text-amber-100 bg-black/70 border border-amber-500/40 rounded-lg px-3 py-2">
-      📡 {rival} se ha desconectado. Si no vuelve y lleva 2 min sin jugar su turno, puedes salir sin perder.
+      📡 {rival} se ha desconectado. Si agota su turno puedes salir sin perder; con 3 turnos agotados seguidos pierde la partida.
     </div>
   ) : null;
 

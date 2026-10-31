@@ -25,7 +25,7 @@ export const SKILLS: Record<number, Skill> = {
   4: {
     id: 4,
     nombre: 'QA Testing',
-    descripcion: 'Devuelve una carta programadora enemiga a la mano del rival.',
+    descripcion: 'Devuelve una carta enemiga a la mano del rival (se descarta si su mano está llena).',
     objetivo: 'carta_enemiga',
     accionTipo: 'DEVOLVER_MANO',
   },

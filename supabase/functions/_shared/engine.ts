@@ -57,6 +57,10 @@ export const MAX_ENERGY_CAP = 10;
 export const ENERGY_PER_TURN = 3;
 export const ENERGY_BONUS_HIT = 1;
 export const MAX_ROUNDS = 3;
+/** Turns (both sides combined) before a round is decided by damage dealt. */
+export const MAX_ROUND_TURNS = 30;
+export const TURN_SECONDS = 90;
+export const ROUND_END_SECONDS = 10;
 
 export const CARD_RULES: CardRule[] = [
   { id: 'junior-dev', nombre: 'Junior Dev', tipo: 'programador', potencia: 1, coste: 1, ataqueCoste: 1, corduraMax: 2, descripcion: 'Resuelve bugs simples con entusiasmo.', habilidades: [] },
@@ -65,8 +69,8 @@ export const CARD_RULES: CardRule[] = [
   { id: 'fullstack', nombre: 'Fullstack', tipo: 'programador', potencia: 2, coste: 2, ataqueCoste: 1, corduraMax: 3, descripcion: 'Ataca bugs en frontend y backend.', habilidades: [[3, 1, 1, 1]] },
   { id: 'devops', nombre: 'DevOps', tipo: 'programador', potencia: 1, coste: 1, ataqueCoste: 1, corduraMax: 2, descripcion: 'Automatiza la destrucción de bugs.', habilidades: [[5, 2, 2, 0]] },
   { id: 'intern', nombre: 'Intern', tipo: 'programador', potencia: 1, coste: 1, ataqueCoste: 1, corduraMax: 2, descripcion: 'Novato con ganas de aprender.', habilidades: [] },
-  { id: 'architect', nombre: 'Architect', tipo: 'programador', potencia: 3, coste: 2, ataqueCoste: 0, corduraMax: 5, descripcion: 'Diseña la solución desde la raíz.', habilidades: [[3, 3, 0, 1]] },
-  { id: 'qa-tester', nombre: 'QA Tester', tipo: 'qa', potencia: 1, coste: 1, ataqueCoste: 1, corduraMax: 2, descripcion: 'Devuelve un programador rival a su mano.', habilidades: [[4, 0, 1, 0]] },
+  { id: 'architect', nombre: 'Architect', tipo: 'programador', potencia: 2, coste: 3, ataqueCoste: 1, corduraMax: 5, descripcion: 'Diseña la solución desde la raíz.', habilidades: [[3, 3, 1, 1]] },
+  { id: 'qa-tester', nombre: 'QA Tester', tipo: 'qa', potencia: 1, coste: 1, ataqueCoste: 1, corduraMax: 2, descripcion: 'Devuelve una carta rival a su mano.', habilidades: [[4, 0, 1, 0]] },
   { id: 'qa-lead', nombre: 'QA Lead', tipo: 'qa', potencia: 2, coste: 2, ataqueCoste: 1, corduraMax: 3, descripcion: 'Limpia la mesa del rival con autoridad.', habilidades: [[4, 0, 2, 0]] },
   { id: 'cafe-maquina', nombre: 'Café de Máquina', tipo: 'consumible', coste: 1, descripcion: 'Restaura 3 de cordura a un aliado.', habilidades: [[6, 3, 1, 0]] },
   { id: 'pr-aprobado', nombre: 'PR Aprobado', tipo: 'consumible', coste: 2, descripcion: '+2 potencia a un aliado por 1 turno.', habilidades: [[7, 2, 2, 1]] },
@@ -75,7 +79,7 @@ export const CARD_RULES: CardRule[] = [
 
 export const SKILL_RULES: Record<number, SkillRule> = {
   3: { id: 3, nombre: 'Par Programming', descripcion: 'Aumenta la potencia de una carta aliada este turno.', objetivo: 'carta_aliada', accionTipo: 'APLICAR_ESTADO', efectoTipo: 'buff_ataque' },
-  4: { id: 4, nombre: 'QA Testing', descripcion: 'Devuelve una carta programadora enemiga a la mano del rival.', objetivo: 'carta_enemiga', accionTipo: 'DEVOLVER_MANO' },
+  4: { id: 4, nombre: 'QA Testing', descripcion: 'Devuelve una carta enemiga a la mano del rival (se descarta si su mano está llena).', objetivo: 'carta_enemiga', accionTipo: 'DEVOLVER_MANO' },
   5: { id: 5, nombre: 'Automatización', descripcion: 'Inflige daño extra al bug igual a la potencia indicada.', objetivo: 'bug', accionTipo: 'DANIO_DIRECTO' },
   6: { id: 6, nombre: 'Cafeína', descripcion: 'Restaura cordura a un aliado.', objetivo: 'carta_aliada', accionTipo: 'CURAR_CORDURA' },
   7: { id: 7, nombre: 'Motivación', descripcion: 'Aumenta la potencia de una carta aliada.', objetivo: 'carta_aliada', accionTipo: 'APLICAR_ESTADO', efectoTipo: 'buff_ataque' },
@@ -127,12 +131,16 @@ export interface SideState {
   energy: number;
   maxEnergy: number;
   turnCount: number;
+  /** Damage dealt to the Bug this round (tie-breaker at the turn limit). */
+  damage: number;
 }
 
 export interface LastAction {
   side: Side;
   type: MatchAction['type'];
   cardId: string | null;
+  targetId: string | null;
+  defId: string | null;
 }
 
 export interface MatchState {
@@ -142,12 +150,18 @@ export interface MatchState {
   sides: Record<Side, SideState>;
   bugComplexity: number;
   roundNumber: number;
+  roundStarter: Side;
+  roundTurns: number;
   gamePhase: MatchPhase;
   turn: Side;
   lastAttacker: Side | null;
   isFirstTurn: boolean;
   message: string;
   lastAction: LastAction | null;
+  /** Epoch ms when the current turn (or round-end pause) began; set by the server. */
+  turnStartedAt: number;
+  /** Consecutive timed-out turns per side; maintained by the server. */
+  afk?: Partial<Record<Side, number>>;
 }
 
 export type MatchAction =
@@ -192,24 +206,29 @@ function dealRound(seed: number, round: number, decks: Record<Side, DeckEntry[]>
 }
 
 function freshSide(dealt: { hand: EngineCard[]; deck: EngineCard[] }, score: number, starts: boolean): SideState {
-  return { hand: dealt.hand, deck: dealt.deck, table: emptyTable(), score, energy: ENERGY_PER_TURN, maxEnergy: ENERGY_PER_TURN, turnCount: starts ? 1 : 0 };
+  // The second player starts at 0⚡ and gains the normal +3⚡ on its first turn, so both open with 3⚡
+  return { hand: dealt.hand, deck: dealt.deck, table: emptyTable(), score, energy: starts ? ENERGY_PER_TURN : 0, maxEnergy: MAX_ENERGY_CAP, turnCount: starts ? 1 : 0, damage: 0 };
 }
 
-export function initMatch(seed: number, decks: Record<Side, DeckEntry[]>, names: Record<Side, string>): MatchState {
+export function initMatch(seed: number, decks: Record<Side, DeckEntry[]>, names: Record<Side, string>, starter?: Side): MatchState {
+  const first: Side = starter ?? (mulberry32(seed ^ 0x5bd1e995)() < 0.5 ? 'p1' : 'p2');
   const dealt = dealRound(seed, 1, decks);
   return {
     seed,
     decks,
     names,
-    sides: { p1: freshSide(dealt.p1, 0, true), p2: freshSide(dealt.p2, 0, false) },
+    sides: { p1: freshSide(dealt.p1, 0, first === 'p1'), p2: freshSide(dealt.p2, 0, first === 'p2') },
     bugComplexity: BUG_MAX_COMPLEXITY,
     roundNumber: 1,
+    roundStarter: first,
+    roundTurns: 0,
     gamePhase: 'playing',
-    turn: 'p1',
+    turn: first,
     lastAttacker: null,
     isFirstTurn: true,
-    message: `🎯 Empieza ${names.p1}`,
+    message: `🎯 Empieza ${names[first]}`,
     lastAction: null,
+    turnStartedAt: 0,
   };
 }
 
@@ -217,20 +236,25 @@ function withSide(s: MatchState, side: Side, patch: Partial<SideState>): MatchSt
   return { ...s, sides: { ...s.sides, [side]: { ...s.sides[side], ...patch } } };
 }
 
-function hitBug(s: MatchState, side: Side, damage: number, message: string, countsAsAttack: boolean): MatchState {
-  const hp = Math.max(0, s.bugComplexity - damage);
-  if (hp > 0) {
-    return { ...s, bugComplexity: hp, lastAttacker: countsAsAttack ? side : s.lastAttacker, message };
-  }
-  const score = s.sides[side].score + 1;
+function endRound(s: MatchState, winner: Side, message: string): MatchState {
+  const score = s.sides[winner].score + 1;
   const over = s.roundNumber >= MAX_ROUNDS || score > MAX_ROUNDS / 2;
   return {
-    ...withSide(s, side, { score }),
-    bugComplexity: 0,
-    lastAttacker: side,
+    ...withSide(s, winner, { score }),
+    lastAttacker: winner,
     gamePhase: over ? 'game-over' : 'round-end',
-    message: `🎉 ${s.names[side]} eliminó el Bug! +1 punto`,
+    message,
   };
+}
+
+function hitBug(s: MatchState, side: Side, damage: number, message: string, countsAsAttack: boolean): MatchState {
+  const dealt = Math.min(damage, s.bugComplexity);
+  const hp = s.bugComplexity - dealt;
+  const next = withSide(s, side, { damage: s.sides[side].damage + dealt });
+  if (hp > 0) {
+    return { ...next, bugComplexity: hp, lastAttacker: countsAsAttack ? side : s.lastAttacker, message };
+  }
+  return endRound({ ...next, bugComplexity: 0 }, side, `🎉 ${s.names[side]} eliminó el Bug! +1 punto`);
 }
 
 const reject = (state: MatchState, error: string): ApplyResult => ({ state, error });
@@ -239,7 +263,10 @@ export function applyAction(s: MatchState, action: MatchAction): ApplyResult {
   const result = applyRules(s, action);
   if (result.error) return result;
   const cardId = 'cardId' in action ? action.cardId : 'attackerId' in action ? action.attackerId : null;
-  return { state: { ...result.state, lastAction: { side: action.side, type: action.type, cardId } } };
+  const targetId = 'targetId' in action ? action.targetId ?? null : null;
+  const own = s.sides[action.side];
+  const defId = cardId ? [...own.hand, ...own.table].find((c) => c?.instanceId === cardId)?.definition.id ?? null : null;
+  return { state: { ...result.state, lastAction: { side: action.side, type: action.type, cardId, targetId, defId } } };
 }
 
 function applyRules(s: MatchState, action: MatchAction): ApplyResult {
@@ -250,9 +277,10 @@ function applyRules(s: MatchState, action: MatchAction): ApplyResult {
   const name = s.names[side];
 
   if (action.type === 'NEXT_ROUND') {
-    if (s.gamePhase !== 'round-end' || s.turn !== side) return reject(s, 'No puedes iniciar la ronda');
+    // Either player (or a timeout) may open the next round, so an idle winner can't stall it
+    if (s.gamePhase !== 'round-end') return reject(s, 'No puedes iniciar la ronda');
     const round = s.roundNumber + 1;
-    const starter = foe;
+    const starter = other(s.lastAttacker ?? s.roundStarter);
     const dealt = dealRound(s.seed, round, s.decks);
     return {
       state: {
@@ -263,6 +291,8 @@ function applyRules(s: MatchState, action: MatchAction): ApplyResult {
         },
         bugComplexity: BUG_MAX_COMPLEXITY,
         roundNumber: round,
+        roundStarter: starter,
+        roundTurns: 0,
         gamePhase: 'playing',
         turn: starter,
         lastAttacker: null,
@@ -373,16 +403,21 @@ function applyRules(s: MatchState, action: MatchAction): ApplyResult {
           const target = them.table[idx]!;
           const foeTable = [...them.table];
           foeTable[idx] = null;
+          const handFull = them.hand.length >= MAX_HAND_SIZE;
+          const fresh: EngineCard = { ...target, cordura: target.definition.corduraMax ?? 0, efectosActivos: [], disponible: true };
           return {
             state: {
-              ...withSide(paid, foe, { table: foeTable, hand: [...them.hand, { ...target, disponible: true }] }),
-              message: `🔍 ${skill.nombre} (${name}): ${target.definition.nombre} vuelve a la mano de ${s.names[foe]} (-${coste}⚡)`,
+              ...withSide(paid, foe, { table: foeTable, hand: handFull ? them.hand : [...them.hand, fresh] }),
+              message: handFull
+                ? `🔍 ${skill.nombre} (${name}): ${target.definition.nombre} se descarta, la mano de ${s.names[foe]} está llena (-${coste}⚡)`
+                : `🔍 ${skill.nombre} (${name}): ${target.definition.nombre} vuelve a la mano de ${s.names[foe]} (-${coste}⚡)`,
             },
           };
         }
         case 'APLICAR_ESTADO':
         case 'CURAR_CORDURA': {
           if (skill.objetivo !== 'carta_aliada' || !targetId) return reject(s, 'Objetivo no válido');
+          if (!fromHand && targetId === card.instanceId) return reject(s, 'Elige otra carta aliada');
           const myTable = paid.sides[side].table;
           const idx = myTable.findIndex((c) => c?.instanceId === targetId);
           if (idx < 0) return reject(s, 'Objetivo no válido');
@@ -411,25 +446,43 @@ function applyRules(s: MatchState, action: MatchAction): ApplyResult {
     case 'END_TURN': {
       const next = foe;
       const nextSide = s.sides[next];
-      const gain = ENERGY_PER_TURN + (s.lastAttacker === next ? ENERGY_BONUS_HIT : 0);
+      const roundTurns = s.roundTurns + 1;
+      // Effects belong to the side that cast them and expire at the end of that side's turn
+      let state = withSide(s, side, { table: tickEfectos(me.table).map((c) => (c ? { ...c, disponible: true } : null)) });
+
+      if (roundTurns >= MAX_ROUND_TURNS) {
+        const dmg = { [side]: me.damage, [foe]: them.damage } as Record<Side, number>;
+        const winner: Side = dmg[side] === dmg[foe] ? other(s.roundStarter) : dmg[side] > dmg[foe] ? side : foe;
+        return {
+          state: endRound(
+            { ...state, roundTurns, isFirstTurn: false },
+            winner,
+            `⏱️ Límite de turnos: ${s.names[winner]} gana la ronda por daño (${dmg.p1}-${dmg.p2})`,
+          ),
+        };
+      }
+
+      const bonus = s.lastAttacker === next ? ENERGY_BONUS_HIT : 0;
+      const gain = ENERGY_PER_TURN + bonus;
       const energy = Math.min(MAX_ENERGY_CAP, nextSide.energy + gain);
-      const canDraw = nextSide.deck.length > 0 && nextSide.hand.length < MAX_HAND_SIZE;
-      const resetTable = (t: (EngineCard | null)[]) => tickEfectos(t).map((c) => (c ? { ...c, disponible: true } : null));
-      let state = withSide(s, side, { table: resetTable(me.table) });
+      const handFull = nextSide.hand.length >= MAX_HAND_SIZE;
+      const canDraw = nextSide.deck.length > 0 && !handFull;
       state = withSide(state, next, {
-        table: resetTable(nextSide.table),
+        table: nextSide.table.map((c) => (c ? { ...c, disponible: true } : null)),
         hand: canDraw ? [...nextSide.hand, nextSide.deck[0]] : nextSide.hand,
         deck: canDraw ? nextSide.deck.slice(1) : nextSide.deck,
         energy,
-        maxEnergy: energy,
         turnCount: nextSide.turnCount + 1,
       });
       return {
         state: {
           ...state,
           turn: next,
+          roundTurns,
           isFirstTurn: false,
-          message: `⏭️ ${name} termina su turno — turno de ${s.names[next]} (+${gain}⚡)`,
+          // The last-hit bonus is paid once
+          lastAttacker: bonus ? null : s.lastAttacker,
+          message: `⏭️ ${name} termina su turno — turno de ${s.names[next]} (+${gain}⚡${bonus ? ' con bonus' : ''})${handFull ? ' · mano llena, no roba' : ''}`,
         },
       };
     }
@@ -458,6 +511,7 @@ export interface SideView {
   energy: number;
   maxEnergy: number;
   turnCount: number;
+  damage: number;
 }
 
 export interface MatchView {
@@ -466,12 +520,14 @@ export interface MatchView {
   sides: Record<Side, SideView>;
   bugComplexity: number;
   roundNumber: number;
+  roundTurns: number;
   gamePhase: MatchPhase;
   turn: Side;
   lastAttacker: Side | null;
   isFirstTurn: boolean;
   message: string;
   lastAction: LastAction | null;
+  turnStartedAt: number;
 }
 
 export function redactFor(s: MatchState, viewer: Side): MatchView {
@@ -486,6 +542,7 @@ export function redactFor(s: MatchState, viewer: Side): MatchView {
       energy: st.energy,
       maxEnergy: st.maxEnergy,
       turnCount: st.turnCount,
+      damage: st.damage,
     };
   };
   return {
@@ -494,12 +551,14 @@ export function redactFor(s: MatchState, viewer: Side): MatchView {
     sides: { p1: sideView('p1'), p2: sideView('p2') },
     bugComplexity: s.bugComplexity,
     roundNumber: s.roundNumber,
+    roundTurns: s.roundTurns,
     gamePhase: s.gamePhase,
     turn: s.turn,
     lastAttacker: s.lastAttacker,
     isFirstTurn: s.isFirstTurn,
     message: s.message,
     lastAction: s.lastAction,
+    turnStartedAt: s.turnStartedAt,
   };
 }
 
