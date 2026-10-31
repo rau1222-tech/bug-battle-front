@@ -43,6 +43,12 @@ export async function leaveMatch(matchId: string): Promise<string> {
   return data;
 }
 
+/** Idempotent: whoever calls second simply finds nothing to delete. */
+export async function deleteMatch(matchId: string): Promise<void> {
+  const { error } = await supabase.rpc('delete_match', { p_match_id: matchId });
+  if (error) console.error('Failed to delete match:', error.message);
+}
+
 const DEFS = new Map(CARD_DEFINITIONS.map((d) => [d.id, d]));
 
 /** Server cards carry rules only; restore local art/audio for rendering. */
@@ -150,6 +156,11 @@ export function useOnlineMatch(matchId: string, userId: string) {
       if (channel) void supabase.removeChannel(channel);
     };
   }, [matchId, userId, load, acceptView]);
+
+  const matchStatus = match?.status;
+  useEffect(() => {
+    if (matchStatus === 'finished' || matchStatus === 'abandoned') void deleteMatch(matchId);
+  }, [matchStatus, matchId]);
 
   const you: Side = view?.you ?? (match?.host_id === userId ? 'p1' : 'p2');
   const foe: Side = you === 'p1' ? 'p2' : 'p1';

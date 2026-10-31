@@ -421,6 +421,10 @@ export type Database = {
         Args: { p_deck_id: string }
         Returns: Json
       }
+      delete_match: {
+        Args: { p_match_id: string }
+        Returns: boolean
+      }
       earn_coins: {
         Args: { p_amount: number; p_user_id: string }
         Returns: number
