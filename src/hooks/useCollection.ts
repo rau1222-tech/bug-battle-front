@@ -69,13 +69,6 @@ export function openPack(
   return results;
 }
 
-async function ensurePlayerRow(userId: string) {
-  const { error } = await supabase
-    .from('players')
-    .upsert({ id: userId, display_name: 'Jugador', gold: INITIAL_COINS, wins: 0, losses: 0 });
-  if (error) throw new Error(error.message);
-}
-
 /* ── Hook ── */
 export function useCollection(userId: string | null | undefined) {
   const [collection, setCollection] = useState<Collection>({});
@@ -95,8 +88,6 @@ export function useCollection(userId: string | null | undefined) {
     setLoading(true);
     (async () => {
       try {
-        await ensurePlayerRow(userId);
-
         const [{ data: playerData, error: playerErr }, { data: collectionData, error: collectionErr }] = await Promise.all([
           supabase.from('players').select('gold').eq('id', userId).single(),
           supabase.from('player_collection').select('card_id, quantity').eq('player_id', userId),

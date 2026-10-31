@@ -1,7 +1,7 @@
 import { Navigate, Outlet, useLocation } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { useProfile } from '@/hooks/useProfile';
-import { AuthContext } from '@/contexts/AuthContext';
+import { AuthContext, type SetupOutletContext } from '@/contexts/AuthContext';
 import { ROUTES } from '@/routes';
 
 function LoadingScreen() {
@@ -12,12 +12,32 @@ function LoadingScreen() {
   );
 }
 
+function ProfileErrorScreen({ onRetry }: { onRetry: () => void }) {
+  return (
+    <div className="h-[100dvh] flex flex-col gap-3 items-center justify-center bg-[hsl(220,20%,6%)] bg-grid-pattern">
+      <div className="text-red-400 font-body text-sm">No se pudo cargar tu perfil.</div>
+      <button
+        onClick={onRetry}
+        className="h-9 px-4 rounded-md border border-cyan-400/30 text-cyan-100 font-display text-xs tracking-wider"
+      >
+        REINTENTAR
+      </button>
+    </div>
+  );
+}
+
+/**
+ * Single place where the post-login rule is applied, for every auth provider:
+ * session → load player row → has hunter name ? app : setup.
+ */
 export default function AuthGuard() {
   const location = useLocation();
   const { user, loading: authLoading, signOut } = useAuth();
+
   const { profile, needsSetup, loading: profileLoading, updateProfile } = useProfile(user);
 
-  if (authLoading || (user && profileLoading)) {
+
+  if (authLoading || profileLoading) {
     return <LoadingScreen />;
   }
 
@@ -25,26 +45,26 @@ export default function AuthGuard() {
     return <Navigate to={ROUTES.LOGIN} replace state={{ from: location.pathname }} />;
   }
 
-  if (needsSetup && location.pathname !== ROUTES.SETUP) {
-    return <Navigate to={ROUTES.SETUP} replace />;
+  if (profileError) {
+    return <ProfileErrorScreen onRetry={retry} />;
   }
 
-  if (!needsSetup && location.pathname === ROUTES.SETUP) {
+  if (needsSetup || !profile) {
+    if (location.pathname !== ROUTES.SETUP) {
+      return <Navigate to={ROUTES.SETUP} replace />;
+    }
+    const setupContext: SetupOutletContext = { user, createProfile };
+    return <Outlet context={setupContext} />;
+  }
+
+  if (location.pathname === ROUTES.SETUP) {
     return <Navigate to={ROUTES.HOME} replace />;
   }
 
-  const safeProfile = profile ?? {
-    id: user.id,
-    display_name: 'Jugador',
-    avatar_url: null,
-    gold: 300,
-    wins: 0,
-    losses: 0,
-    active_deck_id: null,
-  };
-
   return (
+
     <AuthContext.Provider value={{ user, profile: safeProfile, signOut, updateProfile }}>
+
       <Outlet />
     </AuthContext.Provider>
   );
