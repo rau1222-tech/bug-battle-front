@@ -19,7 +19,7 @@ interface Props {
 }
 
 const EMOJI_OPTIONS = ['🃏', '⚔️', '🛡️', '⚖️', '🚀', '🐛', '💻', '🔥', '⭐', '🎯', '🧠', '⚡', '🧪', '☕', '🤖', '👾', '🦾', '🏆'];
-const DEFAULT_EMOJI = '🃏';
+const DEFAULT_EMOJI = '⚔️';
 const TYPE_ORDER: CardType[] = ['programador', 'qa', 'consumible'];
 const TYPE_LABELS: Record<CardType, string> = { programador: 'Programadores', qa: 'QA', consumible: 'Consumibles' };
 const RARITY_ORDER = { epico: 0, raro: 1, comun: 2 } as const;

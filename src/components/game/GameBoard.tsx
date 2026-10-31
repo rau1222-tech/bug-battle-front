@@ -1,6 +1,6 @@
-import { useState, useCallback, useRef, useEffect } from 'react';
+import { useState, useCallback, useRef, useEffect, type ReactNode } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { useGameLogic } from '@/hooks/useGameLogic';
+import { useGameLogic, type GameController } from '@/hooks/useGameLogic';
 import { useGameStats } from '@/hooks/useGameStats';
 import { TABLE_MAX, SKILLS } from '@/constants';
 import BugCentral from './BugCentral';
@@ -27,8 +27,24 @@ type SelectionPhase =
 
 type ConsumableDropTarget = 'bug' | 'carta_aliada' | 'carta_enemiga';
 
-export default function GameBoard({ onExit, deckComposition, playerId, playerName = 'Jugador' }: GameBoardProps) {
+export default function GameBoard({ deckComposition, ...rest }: GameBoardProps) {
   const game = useGameLogic(deckComposition);
+  return <GameBoardView game={game} {...rest} />;
+}
+
+interface GameBoardViewProps {
+  game: GameController;
+  onExit: () => void;
+  /** When set, the game result is persisted client-side (vs-bot mode). */
+  playerId?: string;
+  playerName?: string;
+  /** Online mode: rival name, no local restart, round advance only on your turn. */
+  opponentName?: string;
+  online?: boolean;
+  banner?: ReactNode;
+}
+
+export function GameBoardView({ game, onExit, playerId, playerName = 'Jugador', opponentName, online = false, banner }: GameBoardViewProps) {
   const { recordResult } = useGameStats(playerId);
   const isPlayerTurn = game.turn === 'player';
   const [selection, setSelection] = useState<SelectionPhase>({ type: 'none' });
@@ -411,7 +427,7 @@ export default function GameBoard({ onExit, deckComposition, playerId, playerNam
               || draggingConsumableTarget !== null)
               ? '🎯 OBJETIVO'
               : `🟢 ${playerName.toUpperCase()}`
-            : '🔴 RIVAL'}
+            : `🔴 ${opponentName ? opponentName.toUpperCase() : 'RIVAL'}`}
         </motion.div>
 
         <div className="flex items-center gap-1.5 sm:gap-4 text-[11px] sm:text-base font-display bg-black/30 backdrop-blur-sm px-2 sm:px-4 py-1 sm:py-1.5 rounded-lg border border-amber-900/30 shrink-0">
@@ -444,7 +460,7 @@ export default function GameBoard({ onExit, deckComposition, playerId, playerNam
         </motion.div>
         {/* Bot energy */}
         <div className="flex items-center gap-1.5 sm:gap-2">
-          <span className="text-[9px] sm:text-xs font-display text-red-300/80 drop-shadow-sm">BOT</span>
+          <span className="text-[9px] sm:text-xs font-display text-red-300/80 drop-shadow-sm">{opponentName ?? 'BOT'}</span>
           <div className="relative w-10 h-10 sm:w-14 sm:h-14 flex items-center justify-center rounded-lg border-2 border-red-400/70 bg-gradient-to-b from-red-900/80 to-red-950/90 shadow-[0_0_18px_rgba(239,68,68,0.25),inset_0_1px_0_rgba(255,255,255,0.1)] backdrop-blur-sm">
             <span className="absolute -top-1.5 sm:-top-2 left-1/2 -translate-x-1/2 text-xs sm:text-sm">⚡</span>
             <span className="text-lg sm:text-2xl font-display font-black text-red-300 tabular-nums drop-shadow-[0_0_8px_rgba(239,68,68,0.5)]">
@@ -496,9 +512,13 @@ export default function GameBoard({ onExit, deckComposition, playerId, playerNam
       {/* ===== Action log (bottom-left) ===== */}
       <ActionLog entries={logEntries} />
 
+      {banner && (
+        <div className="absolute top-24 sm:top-28 left-1/2 -translate-x-1/2 z-40 max-w-[90%]">{banner}</div>
+      )}
+
       {/* ===== DECK ===== */}
       <div className="absolute left-[1%] sm:left-[4%] top-[35%] -translate-y-1/2 z-10 flex flex-col items-center gap-3 sm:gap-8">
-        <DeckPile count={game.botDeck.length} label="BOT" />
+        <DeckPile count={game.botDeck.length} label={opponentName ?? 'BOT'} />
         <DeckPile count={game.playerDeck.length} label={playerName} />
       </div>
 
@@ -532,7 +552,7 @@ export default function GameBoard({ onExit, deckComposition, playerId, playerNam
         {/* BOT TABLE — slot-based */}
         <div className="flex-1 flex flex-col justify-end pb-2">
           <div className="text-[10px] font-display text-amber-200/30 uppercase tracking-[0.3em] mb-2 text-center">
-            Bot
+            {opponentName ?? 'Bot'}
           </div>
           <div className={`flex items-end justify-center gap-1 sm:gap-3 min-h-[5rem] sm:min-h-[7rem] md:min-h-[10rem] px-1 sm:px-4 transition-all duration-300 ${
             selection.type === 'picking-enemy'
@@ -832,19 +852,23 @@ export default function GameBoard({ onExit, deckComposition, playerId, playerNam
                 <>
                   <div className="text-6xl mb-4">{game.lastAttacker === 'player' ? '✅' : '❌'}</div>
                   <h2 className="text-3xl font-display font-bold text-amber-100 mb-3">
-                    {game.lastAttacker === 'player' ? `¡Punto para ${playerName}!` : 'Punto para el Bot'}
+                    {game.lastAttacker === 'player' ? `¡Punto para ${playerName}!` : opponentName ? `Punto para ${opponentName}` : 'Punto para el Bot'}
                   </h2>
                   <p className="text-xl text-amber-200/60 font-body">{game.playerScore} - {game.botScore}</p>
                 </>
               )}
             </motion.div>
             <div className="flex flex-col gap-4">
+              {online && game.gamePhase === 'round-end' && !isPlayerTurn ? (
+                <span className="font-display text-amber-200/60 text-sm text-center">Esperando a {opponentName ?? 'tu rival'}…</span>
+              ) : !(online && game.gamePhase === 'game-over') && (
               <button
                 onClick={game.gamePhase === 'game-over' ? game.restartGame : game.startNewRound}
                 className="h-14 px-10 font-display text-base tracking-wide rounded-lg bg-amber-700/80 text-amber-100 hover:bg-amber-600/80 border border-amber-500/30 shadow-[0_0_20px_hsl(35_60%_30%/0.3)] transition-all"
               >
                 {game.gamePhase === 'game-over' ? 'NUEVA PARTIDA' : 'SIGUIENTE RONDA'}
               </button>
+              )}
               {game.gamePhase === 'game-over' && (
                 <button
                   onClick={onExit}
@@ -881,7 +905,7 @@ export default function GameBoard({ onExit, deckComposition, playerId, playerNam
                 ¿Abandonar la partida?
               </h2>
               <p className="text-sm font-body text-amber-200/60 text-center">
-                Perderás el progreso de esta partida.
+                {online ? 'Si sales ahora, la partida contará como derrota.' : 'Perderás el progreso de esta partida.'}
               </p>
               <div className="flex gap-3 w-full">
                 <button

@@ -8,7 +8,13 @@ export const ROUTES = {
   DECK_EDIT: '/decks/edit/:deckId',
   GACHA: '/gacha',
   CARD_CREATE: '/cards/create',
+  ONLINE: '/online',
+  MATCH: '/match/:matchId',
 } as const;
+
+export function matchPath(matchId: string) {
+  return `/match/${matchId}`;
+}
 
 export function deckEditPath(deckId: string) {
   return `/decks/edit/${deckId}`;

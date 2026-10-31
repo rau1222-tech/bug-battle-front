@@ -13,6 +13,8 @@ import PlayPage from "./pages/PlayPage";
 import DecksPage from "./pages/DecksPage";
 import DeckEditorPage from "./pages/DeckEditorPage";
 import GachaPage from "./pages/GachaPage";
+import OnlinePage from "./pages/OnlinePage";
+import MatchPage from "./pages/MatchPage";
 import NotFound from "./pages/NotFound.tsx";
 
 const CardCreatePage = lazy(() => import("./pages/CardCreatePage"));
@@ -36,6 +38,8 @@ const App = () => (
             <Route path={ROUTES.DECK_NEW} element={<DeckEditorPage />} />
             <Route path={ROUTES.DECK_EDIT} element={<DeckEditorPage />} />
             <Route path={ROUTES.GACHA} element={<GachaPage />} />
+            <Route path={ROUTES.ONLINE} element={<OnlinePage />} />
+            <Route path={ROUTES.MATCH} element={<MatchPage />} />
             <Route
               path={ROUTES.CARD_CREATE}
               element={(

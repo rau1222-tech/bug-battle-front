@@ -161,6 +161,146 @@ export type Database = {
         }
         Relationships: []
       }
+      match_actions: {
+        Row: {
+          action: Json
+          created_at: string
+          match_id: string
+          player_id: string
+          seq: number
+        }
+        Insert: {
+          action: Json
+          created_at?: string
+          match_id: string
+          player_id: string
+          seq: number
+        }
+        Update: {
+          action?: Json
+          created_at?: string
+          match_id?: string
+          player_id?: string
+          seq?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "match_actions_match_id_fkey"
+            columns: ["match_id"]
+            isOneToOne: false
+            referencedRelation: "matches"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      match_states: {
+        Row: {
+          match_id: string
+          state: Json
+          updated_at: string
+          version: number
+        }
+        Insert: {
+          match_id: string
+          state: Json
+          updated_at?: string
+          version?: number
+        }
+        Update: {
+          match_id?: string
+          state?: Json
+          updated_at?: string
+          version?: number
+        }
+        Relationships: []
+      }
+      match_views: {
+        Row: {
+          match_id: string
+          player_id: string
+          side: string
+          updated_at: string
+          version: number
+          view: Json
+        }
+        Insert: {
+          match_id: string
+          player_id: string
+          side: string
+          updated_at?: string
+          version: number
+          view: Json
+        }
+        Update: {
+          match_id?: string
+          player_id?: string
+          side?: string
+          updated_at?: string
+          version?: number
+          view?: Json
+        }
+        Relationships: []
+      }
+      matches: {
+        Row: {
+          code: string
+          created_at: string
+          current_turn: string
+          guest_deck: Json | null
+          guest_id: string | null
+          guest_name: string | null
+          guest_result: string | null
+          host_deck: Json
+          host_id: string
+          host_name: string
+          host_result: string | null
+          id: string
+          last_seq: number
+          seed: number
+          status: string
+          updated_at: string
+          winner_id: string | null
+        }
+        Insert: {
+          code: string
+          created_at?: string
+          current_turn?: string
+          guest_deck?: Json | null
+          guest_id?: string | null
+          guest_name?: string | null
+          guest_result?: string | null
+          host_deck: Json
+          host_id: string
+          host_name: string
+          host_result?: string | null
+          id?: string
+          last_seq?: number
+          seed: number
+          status?: string
+          updated_at?: string
+          winner_id?: string | null
+        }
+        Update: {
+          code?: string
+          created_at?: string
+          current_turn?: string
+          guest_deck?: Json | null
+          guest_id?: string | null
+          guest_name?: string | null
+          guest_result?: string | null
+          host_deck?: Json
+          host_id?: string
+          host_name?: string
+          host_result?: string | null
+          id?: string
+          last_seq?: number
+          seed?: number
+          status?: string
+          updated_at?: string
+          winner_id?: string | null
+        }
+        Relationships: []
+      }
       player_collection: {
         Row: {
           card_id: string
@@ -277,13 +417,37 @@ export type Database = {
         Args: { p_card_ids: string[]; p_user_id: string }
         Returns: undefined
       }
+      create_match: {
+        Args: { p_deck_id: string }
+        Returns: Json
+      }
+      delete_match: {
+        Args: { p_match_id: string }
+        Returns: boolean
+      }
       earn_coins: {
         Args: { p_amount: number; p_user_id: string }
         Returns: number
       }
+      finish_match_server: {
+        Args: { p_match_id: string; p_winner: string }
+        Returns: string
+      }
+      join_match: {
+        Args: { p_code: string; p_deck_id: string }
+        Returns: string
+      }
+      leave_match: {
+        Args: { p_match_id: string }
+        Returns: string
+      }
       open_pack: {
         Args: Record<PropertyKey, never>
         Returns: Json
+      }
+      report_match_result: {
+        Args: { p_match_id: string; p_winner: string }
+        Returns: string
       }
       save_deck: {
         Args: {
@@ -297,6 +461,10 @@ export type Database = {
       spend_coins: {
         Args: { p_amount: number; p_user_id: string }
         Returns: number
+      }
+      submit_match_action: {
+        Args: { p_action: Json; p_match_id: string; p_seq: number }
+        Returns: undefined
       }
     }
     Enums: {
