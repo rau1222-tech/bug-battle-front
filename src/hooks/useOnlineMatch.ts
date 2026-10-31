@@ -56,8 +56,6 @@ export async function deleteMatch(matchId: string): Promise<void> {
   if (error) console.error('Failed to delete match:', error.message);
 }
 
-const DEFS = new Map(CARD_DEFINITIONS.map((d) => [d.id, d]));
-
 /** Leaves the random queue; returns a match id if a pairing happened just before cancelling. */
 export async function cancelRandomMatch(): Promise<string | null> {
   const { data, error } = await supabase.rpc('cancel_random_match');
