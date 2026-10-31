@@ -705,3 +705,5 @@ export function useGameLogic(playerComposition?: DeckComposition[]) {
 
   return { ...state, playerAttackBug, playerAttackEnemy, playerUseSkill, playerUseConsumable, playCardToTable, skipTurn, startNewRound, restartGame };
 }
+
+export type GameController = ReturnType<typeof useGameLogic>;

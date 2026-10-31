@@ -195,11 +195,18 @@ export interface DeckComposition {
 
 const defMap = new Map<string, CardTemplate>(CARD_DEFINITIONS.map((c) => [c.id, c]));
 
+export interface CreateDeckOptions {
+  random?: () => number;
+  idPrefix?: string;
+}
+
 /**
  * Build a deck instance list. If a composition is provided, use it (each card_id repeated `quantity` times).
  * Otherwise fall back to a default round-robin distribution.
  */
-export function createDeck(composition?: DeckComposition[]): CardInstance[] {
+export function createDeck(composition?: DeckComposition[], options: CreateDeckOptions = {}): CardInstance[] {
+  const random = options.random ?? Math.random;
+  const prefix = options.idPrefix ?? '';
   const deck: CardInstance[] = [];
   let counter = 0;
 
@@ -208,21 +215,21 @@ export function createDeck(composition?: DeckComposition[]): CardInstance[] {
       const def = defMap.get(entry.card_id);
       if (!def) continue;
       for (let i = 0; i < entry.quantity; i++) {
-        deck.push({ instanceId: `${def.id}-${counter++}`, definition: def, cordura: def.corduraMax ?? 0, efectosActivos: [], disponible: true });
+        deck.push({ instanceId: `${prefix}${def.id}-${counter++}`, definition: def, cordura: def.corduraMax ?? 0, efectosActivos: [], disponible: true });
       }
     }
   } else {
     while (deck.length < DECK_SIZE) {
       for (const def of CARD_DEFINITIONS) {
         if (deck.length >= DECK_SIZE) break;
-        deck.push({ instanceId: `${def.id}-${counter++}`, definition: def, cordura: def.corduraMax ?? 0, efectosActivos: [], disponible: true });
+        deck.push({ instanceId: `${prefix}${def.id}-${counter++}`, definition: def, cordura: def.corduraMax ?? 0, efectosActivos: [], disponible: true });
       }
     }
   }
 
   // Shuffle
   for (let i = deck.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
+    const j = Math.floor(random() * (i + 1));
     [deck[i], deck[j]] = [deck[j], deck[i]];
   }
   return deck;
