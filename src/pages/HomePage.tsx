@@ -104,7 +104,7 @@ export default function HomePage() {
             </div>
 
             {/* Secondary actions row */}
-            <div className="grid grid-cols-2 gap-3">
+            <div className={`grid gap-3 ${profile.admin ? 'grid-cols-3' : 'grid-cols-2'}`}>
               <motion.button
                 whileHover={{ scale: 1.03 }}
                 whileTap={{ scale: 0.97 }}
@@ -124,6 +124,18 @@ export default function HomePage() {
                 <span className="text-xl">🃏</span>
                 <span className="font-display text-[10px] tracking-[0.15em] uppercase">Mis Mazos</span>
               </motion.button>
+
+              {profile.admin && (
+                <motion.button
+                  whileHover={{ scale: 1.03 }}
+                  whileTap={{ scale: 0.97 }}
+                  onClick={() => navigate(ROUTES.CARD_CREATE)}
+                  className="h-14 flex flex-col items-center justify-center gap-1 rounded-md bg-gradient-to-b from-cyan-600/30 to-cyan-900/30 text-cyan-200 hover:from-cyan-500/40 hover:to-cyan-800/40 border border-cyan-500/25 shadow-[0_0_15px_-5px_hsl(195,80%,55%,0.2)] transition-all hover:shadow-[0_0_20px_-5px_hsl(195,80%,55%,0.4)] hover:border-cyan-400/40"
+                >
+                  <span className="text-xl">🧪</span>
+                  <span className="font-display text-[10px] tracking-[0.15em] uppercase">Crear Carta</span>
+                </motion.button>
+              )}
             </div>
           </div>
 

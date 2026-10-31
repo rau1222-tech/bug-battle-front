@@ -10,6 +10,7 @@ export interface Profile {
   wins: number;
   losses: number;
   active_deck_id: string | null;
+  admin: boolean;
 }
 
 export type ProfileUpdate = Partial<Pick<Profile, 'display_name' | 'avatar_url'>>;
@@ -31,7 +32,7 @@ function clearCachedProfile(uid: string) {
   try { localStorage.removeItem(CACHE_KEY + uid); } catch { /* storage unavailable */ }
 }
 
-const PROFILE_COLUMNS = 'id, display_name, avatar_url, gold, wins, losses, active_deck_id';
+const PROFILE_COLUMNS = 'id, display_name, avatar_url, gold, wins, losses, active_deck_id, admin';
 
 interface ProfileState {
   /** User id this state was resolved for; null while nothing has been resolved yet. */
