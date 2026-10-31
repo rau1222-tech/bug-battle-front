@@ -15,7 +15,7 @@ import { toast } from 'sonner';
 
 interface Props {
   onBack: () => void;
-  onPlay: (deckId: string) => void;
+  onPlay: (deck: DeckSummary) => void;
   onCreate: () => void;
   onEdit: (deck: DeckSummary) => void;
 }
@@ -73,15 +73,23 @@ export default function DeckSelectorScreen({ onBack, onPlay, onCreate, onEdit }:
   };
 
   const handlePlay = async (deck: DeckSummary) => {
-    await setActiveDeckId(user?.id, deck.id);
     setActiveId(deck.id);
-    onPlay(deck.id);
+    try {
+      await setActiveDeckId(user?.id, deck.id);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'No se pudo guardar el mazo activo');
+    }
+    onPlay(deck);
   };
 
   const handleSetActive = async (deck: DeckSummary) => {
-    await setActiveDeckId(user?.id, deck.id);
     setActiveId(deck.id);
-    toast.success(`"${deck.name}" seleccionado`);
+    try {
+      await setActiveDeckId(user?.id, deck.id);
+      toast.success(`"${deck.name}" seleccionado`);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'No se pudo guardar el mazo activo');
+    }
   };
 
   const presets = decks.filter((d) => d.is_preset);
