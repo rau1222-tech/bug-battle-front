@@ -44,7 +44,7 @@ export default function DeckSelectorScreen({ onBack, onPlay, onCreate, onEdit }:
     if (!user) return;
     setBusyId(deck.id);
     try {
-      await duplicateDeck(deck, user.id);
+      await duplicateDeck(deck);
       toast.success(`${deck.name} duplicado`);
       await refresh();
     } catch (e) {
@@ -239,6 +239,11 @@ function DeckCard({ deck, isActive, busy, onPlay, onSetActive, onEdit, onDuplica
               <span className="text-emerald-300/70">
                 🛡 {deck.qas} <span className="text-emerald-300/50">qa</span>
               </span>
+              {deck.consumibles > 0 && (
+                <span className="text-violet-300/70">
+                  🧪 {deck.consumibles} <span className="text-violet-300/50">cons</span>
+                </span>
+              )}
               <span className={`ml-auto font-display font-bold ${isValid ? 'text-emerald-300' : 'text-red-400'}`}>
                 {deck.total}/20
               </span>

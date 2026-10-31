@@ -33,7 +33,7 @@ export default function DeckEditorPage() {
     return <LoadingScreen />;
   }
 
-  if (deckId && !loading && !editing) {
+  if (deckId && !loading && (!editing || editing.is_preset)) {
     return <Navigate to={ROUTES.DECKS} replace />;
   }
 

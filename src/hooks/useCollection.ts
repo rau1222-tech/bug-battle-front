@@ -1,23 +1,25 @@
 import { useCallback, useEffect, useState } from 'react';
-import { CARD_DEFINITIONS, type CardTemplate } from '@/constants';
+import type { CardTemplate } from '@/constants';
 import { supabase } from '@/integrations/supabase/client';
 
 /** card_id → total copies owned */
 export type Collection = Record<string, number>;
 
-/** Starting coins for new players */
-const INITIAL_COINS = 300;
-/** Cost of one pack */
+/** Must match public.open_pack() in the DB */
 export const PACK_COST = 100;
-/** Cards per pack */
 export const CARDS_PER_PACK = 3;
 
-/* ── Rarity tiers based on card power ── */
-type Rarity = 'comun' | 'raro' | 'epico';
+export type Rarity = 'comun' | 'raro' | 'epico';
 
 export function getRarity(def: CardTemplate): Rarity {
-  if (def.potencia >= 3) return 'epico';
-  if (def.potencia >= 2) return 'raro';
+  if (def.gachaPeso !== undefined) {
+    if (def.gachaPeso <= 10) return 'epico';
+    if (def.gachaPeso <= 30) return 'raro';
+    return 'comun';
+  }
+  const potencia = def.potencia ?? 0;
+  if (potencia >= 3) return 'epico';
+  if (potencia >= 2) return 'raro';
   return 'comun';
 }
 
@@ -39,53 +41,27 @@ export const RARITY_GLOW: Record<Rarity, string> = {
   epico: 'shadow-purple-500/40',
 };
 
-/* ── Weight table (higher = more likely) ── */
-const WEIGHT: Record<Rarity, number> = { comun: 60, raro: 30, epico: 10 };
-
-function pickRandomCard(
-  cards: CardTemplate[],
-  getWeight?: (card: CardTemplate) => number,
-): CardTemplate {
-  // Build weighted pool
-  const pool: CardTemplate[] = [];
-  for (const def of cards) {
-    const r = getRarity(def);
-    const defaultWeight = WEIGHT[r];
-    const w = Math.max(1, getWeight ? getWeight(def) : defaultWeight);
-    for (let i = 0; i < w; i++) pool.push(def);
-  }
-  return pool[Math.floor(Math.random() * pool.length)];
-}
-
-/** Open a pack → returns array of cards pulled */
-export function openPack(
-  cards: CardTemplate[] = CARD_DEFINITIONS,
-  getWeight?: (card: CardTemplate) => number,
-): CardTemplate[] {
-  const results: CardTemplate[] = [];
-  for (let i = 0; i < CARDS_PER_PACK; i++) {
-    results.push(pickRandomCard(cards, getWeight));
-  }
-  return results;
-}
-
 /* ── Hook ── */
 export function useCollection(userId: string | null | undefined) {
   const [collection, setCollection] = useState<Collection>({});
-  const [coins, setCoins] = useState<number>(INITIAL_COINS);
+  const [coins, setCoins] = useState<number>(0);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [reloadKey, setReloadKey] = useState(0);
 
   useEffect(() => {
     let cancelled = false;
 
     if (!userId) {
       setCollection({});
-      setCoins(INITIAL_COINS);
+      setCoins(0);
+      setError(null);
       setLoading(false);
       return;
     }
 
     setLoading(true);
+    setError(null);
     (async () => {
       try {
         const [{ data: playerData, error: playerErr }, { data: collectionData, error: collectionErr }] = await Promise.all([
@@ -98,19 +74,16 @@ export function useCollection(userId: string | null | undefined) {
 
         const nextCollection: Collection = {};
         for (const row of collectionData ?? []) {
-          nextCollection[row.card_id] = row.quantity;
+          if (row.quantity > 0) nextCollection[row.card_id] = row.quantity;
         }
 
         if (!cancelled) {
           setCollection(nextCollection);
-          setCoins(playerData?.gold ?? INITIAL_COINS);
+          setCoins(playerData?.gold ?? 0);
         }
       } catch (err) {
         console.error('Failed to load collection:', err);
-        if (!cancelled) {
-          setCollection({});
-          setCoins(INITIAL_COINS);
-        }
+        if (!cancelled) setError(err instanceof Error ? err.message : 'No se pudo cargar la colección');
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -119,73 +92,23 @@ export function useCollection(userId: string | null | undefined) {
     return () => {
       cancelled = true;
     };
-  }, [userId]);
+  }, [userId, reloadKey]);
 
-  const addCards = useCallback(async (cards: CardTemplate[]) => {
-    if (!userId || cards.length === 0) return;
+  const refresh = useCallback(() => setReloadKey((k) => k + 1), []);
 
-    const increments = cards.reduce<Record<string, number>>((acc, card) => {
-      acc[card.id] = (acc[card.id] ?? 0) + 1;
-      return acc;
-    }, {});
-
-    const cardIds = Object.keys(increments);
-    const { data: existingRows, error: readErr } = await supabase
-      .from('player_collection')
-      .select('card_id, quantity')
-      .eq('player_id', userId)
-      .in('card_id', cardIds);
-    if (readErr) throw new Error(readErr.message);
-
-    const existingMap = new Map((existingRows ?? []).map((row) => [row.card_id, row.quantity]));
-    const rows = cardIds.map((cardId) => ({
-      player_id: userId,
-      card_id: cardId,
-      quantity: (existingMap.get(cardId) ?? 0) + increments[cardId],
-    }));
-
-    const { error: upsertErr } = await supabase
-      .from('player_collection')
-      .upsert(rows, { onConflict: 'player_id,card_id' });
-    if (upsertErr) throw new Error(upsertErr.message);
-
+  /** Spends coins and stores the pulled cards atomically on the server; returns pulled card ids. */
+  const buyPack = useCallback(async (): Promise<string[]> => {
+    const { data, error: rpcErr } = await supabase.rpc('open_pack');
+    if (rpcErr) throw new Error(rpcErr.message);
+    const result = data as { gold: number; cards: string[] };
+    setCoins(result.gold);
     setCollection((prev) => {
       const next = { ...prev };
-      for (const card of cards) {
-        next[card.id] = (next[card.id] ?? 0) + 1;
-      }
+      for (const id of result.cards) next[id] = (next[id] ?? 0) + 1;
       return next;
     });
-  }, [userId]);
+    return result.cards;
+  }, []);
 
-  const spendCoins = useCallback(async (amount: number): Promise<boolean> => {
-    if (!userId) return false;
-    if (coins < amount) return false;
-
-    const next = coins - amount;
-    const { error } = await supabase
-      .from('players')
-      .update({ gold: next })
-      .eq('id', userId);
-    if (error) return false;
-
-    setCoins(next);
-    return true;
-  }, [coins, userId]);
-
-  const earnCoins = useCallback(async (amount: number) => {
-    if (!userId) return;
-    const next = coins + amount;
-    const { error } = await supabase
-      .from('players')
-      .update({ gold: next })
-      .eq('id', userId);
-    if (error) throw new Error(error.message);
-    setCoins(next);
-  }, [coins, userId]);
-
-  /** How many copies of a card the player owns */
-  const owned = useCallback((cardId: string) => collection[cardId] ?? 0, [collection]);
-
-  return { collection, coins, loading, addCards, spendCoins, earnCoins, owned };
+  return { collection, coins, loading, error, refresh, buyPack };
 }

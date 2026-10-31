@@ -15,6 +15,7 @@ export interface CardTemplate {
   descripcion: string;
   image?: string;
   audio?: string;
+  gachaPeso?: number;
   /** Cada tupla: [id_habilidad, potencia, coste, duracion] */
   habilidades: [number, number, number, number][];
 }
@@ -161,6 +162,7 @@ export const CARD_DEFINITIONS: CardTemplate[] = [
 
 export const BUG_MAX_COMPLEXITY = 10;
 export const DECK_SIZE = 20;
+export const MAX_COPIES = 2;
 export const INITIAL_DRAW = 4;
 export const TABLE_MAX = 4;
 export const MAX_HAND_SIZE = 6;

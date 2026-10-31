@@ -281,6 +281,19 @@ export type Database = {
         Args: { p_amount: number; p_user_id: string }
         Returns: number
       }
+      open_pack: {
+        Args: Record<PropertyKey, never>
+        Returns: Json
+      }
+      save_deck: {
+        Args: {
+          p_cards: Json
+          p_cover_emoji: string
+          p_deck_id: string | null
+          p_name: string
+        }
+        Returns: string
+      }
       spend_coins: {
         Args: { p_amount: number; p_user_id: string }
         Returns: number
