@@ -3,6 +3,7 @@ import { toast } from 'sonner';
 import BackButton from '@/components/ui/BackButton';
 import { useCards } from '@/hooks/useCards';
 import { useCardCreate, type SkillConfigInput } from '@/hooks/useCardCreate';
+import { RARITY_COLORS, RARITY_GACHA_WEIGHT, RARITY_LABELS, type Rarity } from '@/hooks/useCollection';
 import type { CardTemplate, CardType } from '@/constants';
 import CardPreview from './CardPreview';
 import SkillConfigurator from './SkillConfigurator';
@@ -25,6 +26,7 @@ export default function CardCreatorScreen({ onBack }: Props) {
 
   const [nombre, setNombre] = useState('');
   const [tipo, setTipo] = useState<CardType>('programador');
+  const [rareza, setRareza] = useState<Rarity>('comun');
   const [descripcion, setDescripcion] = useState('');
   const [coste, setCoste] = useState(1);
   const [potencia, setPotencia] = useState(1);
@@ -44,11 +46,12 @@ export default function CardCreatorScreen({ onBack }: Props) {
     ataqueCoste: tipo === 'consumible' ? undefined : ataqueCoste,
     corduraMax: tipo === 'consumible' ? undefined : corduraMax,
     descripcion,
+    gachaPeso: RARITY_GACHA_WEIGHT[rareza],
     image: imageMode === 'url' ? imageUrl : imageFile ? URL.createObjectURL(imageFile) : undefined,
     habilidades: habilidades
       .filter((h) => h.skillId !== null)
       .map((h) => [h.skillId as number, h.potencia, h.coste, h.duracion]),
-  }), [nombre, tipo, potencia, coste, ataqueCoste, corduraMax, descripcion, imageMode, imageUrl, imageFile, habilidades]);
+  }), [nombre, tipo, rareza, potencia, coste, ataqueCoste, corduraMax, descripcion, imageMode, imageUrl, imageFile, habilidades]);
 
   const updateSkill = (index: number, next: SkillConfigInput) => {
     setHabilidades((current) => current.map((item, idx) => (idx === index ? next : item)));
@@ -61,6 +64,7 @@ export default function CardCreatorScreen({ onBack }: Props) {
   const resetForm = (form: HTMLFormElement) => {
     setNombre('');
     setTipo('programador');
+    setRareza('comun');
     setDescripcion('');
     setCoste(1);
     setPotencia(1);
@@ -82,6 +86,7 @@ export default function CardCreatorScreen({ onBack }: Props) {
       await createCard({
         nombre,
         tipo,
+        rareza,
         potencia: tipo === 'consumible' ? undefined : potencia,
         coste,
         ataqueCoste: tipo === 'consumible' ? undefined : ataqueCoste,
@@ -114,7 +119,7 @@ export default function CardCreatorScreen({ onBack }: Props) {
 
         <div className="grid lg:grid-cols-[1.3fr_0.7fr] gap-4 items-start">
           <form onSubmit={handleSubmit} className="rounded-lg border border-cyan-500/20 bg-[hsl(220,20%,8%)]/90 backdrop-blur-md p-4 space-y-4">
-            <div className="grid sm:grid-cols-2 gap-3">
+            <div className="grid sm:grid-cols-3 gap-3">
               <div>
                 <label className="block text-xs font-body text-cyan-200/80 mb-1">Nombre</label>
                 <input
@@ -135,6 +140,19 @@ export default function CardCreatorScreen({ onBack }: Props) {
                   <option value="programador">Programador</option>
                   <option value="qa">QA</option>
                   <option value="consumible">Consumible</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-xs font-body text-cyan-200/80 mb-1">Rareza</label>
+                <select
+                  value={rareza}
+                  onChange={(e) => setRareza(e.target.value as Rarity)}
+                  className="w-full h-10 rounded bg-[hsl(220,15%,12%)] border border-cyan-800/30 px-3 text-sm text-cyan-100"
+                >
+                  {(Object.keys(RARITY_LABELS) as Rarity[]).map((r) => (
+                    <option key={r} value={r}>{RARITY_LABELS[r]}</option>
+                  ))}
                 </select>
               </div>
             </div>
@@ -278,6 +296,9 @@ export default function CardCreatorScreen({ onBack }: Props) {
           <div className="rounded-lg border border-cyan-500/20 bg-[hsl(220,20%,8%)]/90 backdrop-blur-md p-4">
             <h2 className="text-xs font-display tracking-wider text-cyan-100 mb-3">Preview</h2>
             <CardPreview card={preview} />
+            <p className={`mt-3 mx-auto w-fit px-2 py-0.5 rounded border text-[10px] font-display tracking-wider ${RARITY_COLORS[rareza]}`}>
+              {RARITY_LABELS[rareza]}
+            </p>
           </div>
         </div>
       </div>

@@ -11,6 +11,13 @@ export const CARDS_PER_PACK = 3;
 
 export type Rarity = 'comun' | 'raro' | 'epico';
 
+/** Gacha weight stored in cards.gacha_peso for each rarity; must stay consistent with getRarity thresholds. */
+export const RARITY_GACHA_WEIGHT: Record<Rarity, number> = {
+  comun: 60,
+  raro: 30,
+  epico: 10,
+};
+
 export function getRarity(def: CardTemplate): Rarity {
   if (def.gachaPeso !== undefined) {
     if (def.gachaPeso <= 10) return 'epico';

@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import type { CardType, SkillActionType } from '@/constants';
 import { supabase } from '@/integrations/supabase/client';
+import { RARITY_GACHA_WEIGHT, type Rarity } from '@/hooks/useCollection';
 
 const CARD_IMAGES_BUCKET = 'card-images';
 
@@ -15,6 +16,7 @@ export interface SkillConfigInput {
 export interface CreateCardInput {
   nombre: string;
   tipo: CardType;
+  rareza: Rarity;
   potencia?: number;
   coste: number;
   ataqueCoste?: number;
@@ -98,7 +100,7 @@ export function useCardCreate() {
         cordura_max: input.tipo === 'consumible' ? null : (input.corduraMax ?? 0),
         descripcion,
         image_url: imageUrl,
-        gacha_peso: 1,
+        gacha_peso: RARITY_GACHA_WEIGHT[input.rareza],
       });
 
       if (cardError) throw new Error(cardError.message);
