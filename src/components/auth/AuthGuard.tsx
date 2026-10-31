@@ -33,9 +33,15 @@ function ProfileErrorScreen({ onRetry }: { onRetry: () => void }) {
 export default function AuthGuard() {
   const location = useLocation();
   const { user, loading: authLoading, signOut } = useAuth();
-
-  const { profile, needsSetup, loading: profileLoading, updateProfile } = useProfile(user);
-
+  const {
+    profile,
+    needsSetup,
+    loading: profileLoading,
+    error: profileError,
+    retry,
+    createProfile,
+    updateProfile,
+  } = useProfile(user);
 
   if (authLoading || profileLoading) {
     return <LoadingScreen />;
@@ -62,9 +68,7 @@ export default function AuthGuard() {
   }
 
   return (
-
-    <AuthContext.Provider value={{ user, profile: safeProfile, signOut, updateProfile }}>
-
+    <AuthContext.Provider value={{ user, profile, signOut, updateProfile }}>
       <Outlet />
     </AuthContext.Provider>
   );

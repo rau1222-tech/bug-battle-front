@@ -137,17 +137,15 @@ export function useProfile(user: User | null) {
     if (!user) throw new Error('No hay sesión activa');
     const { data, error } = await supabase
       .from('players')
-
       .update(changes)
       .eq('id', user.id)
-      .select('id, display_name, avatar_url, gold, wins, losses, active_deck_id')
+      .select(PROFILE_COLUMNS)
       .single();
     if (error) throw error;
-    setProfile(data);
     cacheProfile(data);
+    setState({ userId: user.id, profile: data, error: false });
     return data;
-  }, [user?.id]);
+  }, [user]);
 
-  return { profile, loading, needsSetup, createProfile, updateProfile };
-
+  return { profile, loading, needsSetup, error, retry, createProfile, updateProfile };
 }
