@@ -28,3 +28,4 @@ package-lock.json
 # Local Supabase database dump (npm run db:dump)
 supabase/dump/
 scripts/dump-supabase.mjs
+supabase/config.toml

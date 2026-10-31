@@ -32,11 +32,13 @@ export async function getActiveDeckId(userId: string | null | undefined): Promis
 
 export async function setActiveDeckId(userId: string | null | undefined, id: string | null) {
   if (!userId) return;
-  const { error } = await supabase
+  const { data, error } = await supabase
     .from('players')
     .update({ active_deck_id: id })
-    .eq('id', userId);
+    .eq('id', userId)
+    .select('id');
   if (error) throw new Error(error.message);
+  if (!data || data.length === 0) throw new Error('No existe el jugador en la tabla players');
 }
 
 function summarize(
@@ -56,10 +58,10 @@ function summarize(
   return { ...d, cards, total, programadores: progs, qas };
 }
 
-/* Fallback presets when Supabase is unreachable */
+/* Fallback presets when Supabase is unreachable; ids match supabase/migrations/20261031130000_seed_preset_decks.sql */
 const OFFLINE_PRESETS: DeckSummary[] = [
   summarize(
-    { id: 'offline-ataque', name: 'Ataque Frontal', cover_emoji: '⚔️', is_preset: true, user_id: null },
+    { id: '00000000-0000-4000-8000-000000000001', name: 'Ataque Frontal', cover_emoji: '⚔️', is_preset: true, user_id: null },
     [
       { card_id: 'senior-dev', quantity: 4 }, { card_id: 'architect', quantity: 4 },
       { card_id: 'mid-dev', quantity: 3 }, { card_id: 'fullstack', quantity: 3 },
@@ -68,7 +70,7 @@ const OFFLINE_PRESETS: DeckSummary[] = [
     ],
   ),
   summarize(
-    { id: 'offline-defensa', name: 'Defensa Total', cover_emoji: '🛡️', is_preset: true, user_id: null },
+    { id: '00000000-0000-4000-8000-000000000002', name: 'Defensa Total', cover_emoji: '🛡️', is_preset: true, user_id: null },
     [
       { card_id: 'qa-lead', quantity: 4 }, { card_id: 'qa-tester', quantity: 4 },
       { card_id: 'senior-dev', quantity: 3 }, { card_id: 'architect', quantity: 3 },
@@ -77,7 +79,7 @@ const OFFLINE_PRESETS: DeckSummary[] = [
     ],
   ),
   summarize(
-    { id: 'offline-equilibrio', name: 'Equilibrio', cover_emoji: '⚖️', is_preset: true, user_id: null },
+    { id: '00000000-0000-4000-8000-000000000003', name: 'Equilibrio', cover_emoji: '⚖️', is_preset: true, user_id: null },
     [
       { card_id: 'senior-dev', quantity: 3 }, { card_id: 'mid-dev', quantity: 3 },
       { card_id: 'junior-dev', quantity: 3 }, { card_id: 'fullstack', quantity: 3 },
@@ -86,7 +88,7 @@ const OFFLINE_PRESETS: DeckSummary[] = [
     ],
   ),
   summarize(
-    { id: 'offline-prueba-consumibles', name: 'Prueba Consumibles', cover_emoji: '🧪', is_preset: true, user_id: null },
+    { id: '00000000-0000-4000-8000-000000000004', name: 'Prueba Consumibles', cover_emoji: '🧪', is_preset: true, user_id: null },
     [
       { card_id: 'cafe-maquina', quantity: 6 }, { card_id: 'pr-aprobado', quantity: 4 },
       { card_id: 'hotfix', quantity: 4 }, { card_id: 'senior-dev', quantity: 2 },
@@ -96,15 +98,6 @@ const OFFLINE_PRESETS: DeckSummary[] = [
   ),
 ];
 
-const LOCAL_TEST_PRESET = summarize(
-  { id: 'local-prueba-consumibles', name: 'Prueba Consumibles', cover_emoji: '🧪', is_preset: true, user_id: null },
-  [
-    { card_id: 'cafe-maquina', quantity: 6 }, { card_id: 'pr-aprobado', quantity: 4 },
-    { card_id: 'hotfix', quantity: 4 }, { card_id: 'senior-dev', quantity: 2 },
-    { card_id: 'fullstack', quantity: 1 }, { card_id: 'qa-tester', quantity: 2 },
-    { card_id: 'qa-lead', quantity: 1 },
-  ],
-);
 
 export function useDecks(userId: string | null | undefined) {
   const [decks, setDecks] = useState<DeckSummary[]>([]);
@@ -148,7 +141,7 @@ export function useDecks(userId: string | null | undefined) {
       }
 
       const remoteDecks = deckRows.map((d) => summarize(d, byDeck.get(d.id) ?? []));
-      setDecks([...remoteDecks, LOCAL_TEST_PRESET]);
+      setDecks(remoteDecks);
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : (err as { message?: string })?.message ?? 'Error de conexión';
       console.warn('Supabase fetch failed, using offline presets:', msg);
