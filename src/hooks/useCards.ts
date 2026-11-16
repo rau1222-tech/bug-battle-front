@@ -2,6 +2,8 @@ import { useEffect, useState } from 'react';
 import { CARD_DEFINITIONS, SKILLS, type CardTemplate, type CardType, type Skill } from '@/constants';
 import { supabase } from '@/integrations/supabase/client';
 
+const BUILTIN = new Map(CARD_DEFINITIONS.map((c) => [c.id, c]));
+
 export function useCards() {
   const [cards, setCards] = useState<CardTemplate[]>(CARD_DEFINITIONS);
   const [skills, setSkills] = useState<Record<number, Skill>>(SKILLS);
@@ -51,8 +53,8 @@ export function useCards() {
           ataqueCoste: row.ataque_coste ?? undefined,
           corduraMax: row.cordura_max ?? undefined,
           descripcion: row.descripcion ?? '',
-          image: row.image_url ?? undefined,
-          audio: row.audio_url ?? undefined,
+          image: row.image_url ?? BUILTIN.get(row.id)?.image,
+          audio: row.audio_url ?? BUILTIN.get(row.id)?.audio,
           gachaPeso: row.gacha_peso,
           habilidades: byCard.get(row.id) ?? [],
         }));

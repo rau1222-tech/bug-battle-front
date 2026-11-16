@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { CARD_DEFINITIONS, type CardInstance } from '@/constants';
-import type { EngineCard, GameMessage, MatchAction, MatchView, Side } from '@/game/onlineEngine';
+import { CARD_DEFINITIONS, type CardInstance, type CardTemplate } from '@/constants';
+import { BUG_MAX_COMPLEXITY, nextTurnGain, roundCarryEnergy, type EngineCard, type GameMessage, type MatchAction, type MatchView, type Side } from '@/game/onlineEngine';
 import { useI18n } from '@/i18n';
 
 export type BugState = 'idle' | 'hit' | 'death';
@@ -24,7 +24,11 @@ export interface ControllerLastAction {
 }
 
 export interface GameController {
+  bugId: string;
   bugComplexity: number;
+  bugMaxComplexity: number;
+  /** Counterattack damage the Bug deals to whoever hit it during their turn. */
+  bugPower: number;
   bugState: BugState;
   playerHand: CardInstance[];
   /** Slot-based table: fixed length TABLE_MAX, null = empty slot */
@@ -54,6 +58,12 @@ export interface GameController {
   botEnergy: number;
   playerMaxEnergy: number;
   botMaxEnergy: number;
+  /** Energy each side gains at the start of its next turn. */
+  playerNextTurnGain: number;
+  botNextTurnGain: number;
+  /** Extra energy each side would start the next round with. */
+  playerNextRoundBonus: number;
+  botNextRoundBonus: number;
   /** True while an action is in flight; input should be ignored. */
   busy: boolean;
   /** Client epoch ms when the current turn/pause times out, if timed. */
@@ -70,9 +80,15 @@ export interface GameController {
 
 const DEFS = new Map(CARD_DEFINITIONS.map((d) => [d.id, d]));
 
-/** Engine cards carry rules only; restore local art/audio for rendering. */
-const hydrate = (card: EngineCard): CardInstance => ({ ...card, definition: DEFS.get(card.definition.id) ?? card.definition });
-const hydrateTable = (table: (EngineCard | null)[]) => table.map((c) => (c ? hydrate(c) : null));
+/** Engine cards carry rules only; add the art from the card catalog (or the built-in assets). */
+function hydrator(cards: CardTemplate[]) {
+  const art = new Map(cards.map((c) => [c.id, c]));
+  const hydrate = (card: EngineCard): CardInstance => {
+    const look = art.get(card.definition.id) ?? DEFS.get(card.definition.id);
+    return { ...card, definition: { ...card.definition, image: look?.image, audio: look?.audio } };
+  };
+  return { hydrate, hydrateTable: (table: (EngineCard | null)[]) => table.map((c) => (c ? hydrate(c) : null)), storedName: (id: string) => art.get(id)?.nombre };
+}
 
 interface ControllerOptions {
   version: number;
@@ -83,11 +99,14 @@ interface ControllerOptions {
   turnDeadline: number | null;
   dispatch: (action: ActionInput) => void;
   restart: () => void;
+  /** Card catalog used for art; rules always come from the engine view. */
+  cards: CardTemplate[];
 }
 
 /** Maps an engine view (local or online) to the board's controller, adding highlight/hit animations. */
 export function useMatchController(view: MatchView | null, opts: ControllerOptions): GameController | null {
-  const { version, message, messageKey, busy, turnDeadline, dispatch, restart } = opts;
+  const { version, message, messageKey, busy, turnDeadline, dispatch, restart, cards } = opts;
+  const { hydrate, hydrateTable, storedName } = useMemo(() => hydrator(cards), [cards]);
   const [highlight, setHighlight] = useState<{ cardId: string | null; targetId: string | null }>({ cardId: null, targetId: null });
   const [bugHit, setBugHit] = useState(false);
   const you: Side = view?.you ?? 'p1';
@@ -123,7 +142,10 @@ export function useMatchController(view: MatchView | null, opts: ControllerOptio
     const toView = (side: Side | null): ViewSide | null => (side === null ? null : side === you ? 'player' : 'bot');
     const la = view.lastAction;
     return {
+      bugId: view.bug?.id ?? 'nullpointer',
       bugComplexity: view.bugComplexity,
+      bugMaxComplexity: view.bug?.maxHp ?? BUG_MAX_COMPLEXITY,
+      bugPower: view.bug?.potencia ?? 0,
       bugState: view.bugComplexity === 0 ? 'death' : bugHit ? 'hit' : 'idle',
       playerHand: (me.hand ?? []).map(hydrate),
       playerTable: hydrateTable(me.table),
@@ -141,8 +163,8 @@ export function useMatchController(view: MatchView | null, opts: ControllerOptio
       turn: toView(view.turn)!,
       lastAttacker: toView(view.lastAttacker),
       message: message
-        ? `⚠️ ${(message.msg ? gameMessage(message.msg) : message.text).replace(/^⚠️\s*/, '')}`
-        : view.msg ? gameMessage(view.msg) : view.message,
+        ? `⚠️ ${(message.msg ? gameMessage(message.msg, storedName) : message.text).replace(/^⚠️\s*/, '')}`
+        : view.msg ? gameMessage(view.msg, storedName) : view.message,
       messageKey,
       lastAction: la ? { side: toView(la.side)!, type: la.type, cardId: la.cardId, targetId: la.targetId ?? null, defId: la.defId ?? null } : null,
       actionKey: version,
@@ -152,6 +174,10 @@ export function useMatchController(view: MatchView | null, opts: ControllerOptio
       botEnergy: opp.energy,
       playerMaxEnergy: me.maxEnergy,
       botMaxEnergy: opp.maxEnergy,
+      playerNextTurnGain: nextTurnGain(view, you),
+      botNextTurnGain: nextTurnGain(view, foe),
+      playerNextRoundBonus: roundCarryEnergy(me.damage ?? 0),
+      botNextRoundBonus: roundCarryEnergy(opp.damage ?? 0),
       busy,
       turnDeadline,
       playCardToTable: (cardId, slot) => dispatch({ type: 'PLACE_CARD', cardId, slot }),
@@ -163,5 +189,5 @@ export function useMatchController(view: MatchView | null, opts: ControllerOptio
       startNewRound: () => dispatch({ type: 'NEXT_ROUND' }),
       restartGame: restart,
     };
-  }, [view, you, bugHit, message, messageKey, version, highlight, busy, turnDeadline, dispatch, restart, gameMessage]);
+  }, [view, you, bugHit, message, messageKey, version, highlight, busy, turnDeadline, dispatch, restart, gameMessage, hydrate, hydrateTable, storedName]);
 }

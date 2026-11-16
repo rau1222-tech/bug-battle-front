@@ -1,18 +1,28 @@
 import { motion, AnimatePresence } from 'framer-motion';
 import { BugState } from '@/hooks/useGameLogic';
-import { BUG_MAX_COMPLEXITY } from '@/constants';
 import { useRef, useEffect } from 'react';
 import { useI18n } from '@/i18n';
+import { BUG_RULES } from '@/game/onlineEngine';
+
+// Placeholder tint per Bug until each one has its own art
+const BUG_TINT: Record<string, string> = {
+  heisenbug: 'hue-rotate-180',
+  'legacy-code': 'hue-rotate-60 saturate-50',
+};
 
 interface BugCentralProps {
+  bugId: string;
   complexity: number;
+  maxComplexity: number;
+  power: number;
   bugState: BugState;
   id?: string;
 }
 
-export default function BugCentral({ complexity, bugState, id }: BugCentralProps) {
+export default function BugCentral({ bugId, complexity, maxComplexity, power, bugState, id }: BugCentralProps) {
   const { t } = useI18n();
-  const hpPercent = (complexity / BUG_MAX_COMPLEXITY) * 100;
+  const bugName = BUG_RULES.find((b) => b.id === bugId)?.nombre ?? 'Bug';
+  const hpPercent = (complexity / maxComplexity) * 100;
   const explosionRef = useRef<HTMLVideoElement>(null);
 
   useEffect(() => {
@@ -51,12 +61,12 @@ export default function BugCentral({ complexity, bugState, id }: BugCentralProps
             />
           ) : (
             <motion.video
-              key="idle"
+              key={`idle-${bugId}`}
               src="/assets/Bug.webm"
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              className="w-full h-full object-contain drop-shadow-[0_0_30px_rgba(100,255,100,0.3)]"
+              className={`w-full h-full object-contain drop-shadow-[0_0_30px_rgba(100,255,100,0.3)] ${BUG_TINT[bugId] ?? ''}`}
               muted
               playsInline
               autoPlay
@@ -86,7 +96,8 @@ export default function BugCentral({ complexity, bugState, id }: BugCentralProps
         />
       </div>
       <span className="text-[9px] sm:text-[11px] md:text-xs font-display text-amber-200/50 tracking-wider">
-        {t('game.complexity', { current: complexity, max: BUG_MAX_COMPLEXITY })}
+        {bugName} · {t('game.complexity', { current: complexity, max: maxComplexity })}
+        {power > 0 && <> · ⚔️ {power}</>}
       </span>
     </div>
   );

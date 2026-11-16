@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { FunctionsHttpError, type RealtimeChannel } from '@supabase/supabase-js';
 import { supabase } from '@/integrations/supabase/client';
 import { useMatchController, type ActionInput, type LocalMessage } from '@/hooks/useMatchController';
+import { useCards } from '@/hooks/useCards';
 import { ROUND_END_SECONDS, TURN_SECONDS, type GameMessage, type MatchView, type Side } from '@/game/onlineEngine';
 import { t, translator } from '@/i18n';
 
@@ -236,6 +237,7 @@ export function useOnlineMatch(matchId: string, userId: string) {
   }, [turnDeadline, status, callEngine, acceptView]);
 
   const noop = useCallback(() => {}, []);
+  const { cards } = useCards();
   const game = useMatchController(view, {
     version,
     message: localMessage,
@@ -244,6 +246,7 @@ export function useOnlineMatch(matchId: string, userId: string) {
     turnDeadline,
     dispatch,
     restart: noop,
+    cards,
   });
 
   return {

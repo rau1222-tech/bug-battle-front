@@ -122,9 +122,10 @@ export function makeTranslator(lang: Language) {
   const skillDescription = (skill: NamedSkill) => contentText(lang, `content.skill.${skill.id}.desc`, skill.descripcion);
   const cardNameById = (id: string, fallback?: string) => contentText(lang, `content.card.${id}.name`, fallback) || id;
   const skillNameById = (id: number, fallback?: string) => contentText(lang, `content.skill.${id}.name`, fallback) || String(id);
-  const gameMessage = (msg: GameMessage) => formatGameMessage(msg, {
+  /** `storedName` gives the database name of cards that have no built-in translation. */
+  const gameMessage = (msg: GameMessage, storedName?: (id: string) => string | undefined) => formatGameMessage(msg, {
     template: (key) => (hasTranslation(lang, `engine.${key}`) || hasTranslation(DEFAULT_LANGUAGE, `engine.${key}`) ? translate(lang, `engine.${key}`) : undefined),
-    cardName: (id) => cardNameById(id),
+    cardName: (id) => cardNameById(id, storedName?.(id)),
     skillName: (id) => skillNameById(id),
   });
   return {

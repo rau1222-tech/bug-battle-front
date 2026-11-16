@@ -11,7 +11,8 @@
     "preview": "vite preview",
     "test": "vitest run",
     "test:watch": "vitest",
-    "db:dump": "node scripts/dump-supabase.mjs"
+    "db:dump": "node scripts/dump-supabase.mjs",
+    "sim": "vite-node scripts/balance-sim.ts"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.10.0",

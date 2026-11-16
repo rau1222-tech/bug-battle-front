@@ -3,11 +3,15 @@ import {
   ROUND_END_SECONDS,
   TURN_SECONDS,
   applyAction,
+  catalogFromRows,
   initMatch,
   matchWinner,
   other,
   parseAction,
   redactFor,
+  type CardCatalog,
+  type CardRow,
+  type CardSkillRow,
   type DeckEntry,
   type MatchAction,
   type MatchState,
@@ -62,16 +66,30 @@ async function publishViews(admin: SupabaseClient, match: MatchRow, state: Match
   if (error) throw error;
 }
 
+/** Current rules of the cards in both decks; the match keeps this snapshot for its whole life. */
+async function loadCatalog(admin: SupabaseClient, decks: DeckEntry[][]): Promise<CardCatalog> {
+  const ids = [...new Set(decks.flat().map((e) => e.card_id))];
+  const [cards, skills] = await Promise.all([
+    admin.from('cards').select('id, nombre, tipo, potencia, coste, ataque_coste, cordura_max, descripcion').in('id', ids),
+    admin.from('card_skills').select('card_id, skill_id, potencia, coste, duracion, orden').in('card_id', ids),
+  ]);
+  if (cards.error) throw cards.error;
+  if (skills.error) throw skills.error;
+  return catalogFromRows((cards.data ?? []) as CardRow[], (skills.data ?? []) as CardSkillRow[]);
+}
+
 async function loadOrInit(admin: SupabaseClient, match: MatchRow): Promise<StateRow> {
   const existing = await loadState(admin, match.id);
   if (existing) return existing;
 
   const seed = crypto.getRandomValues(new Uint32Array(1))[0] >>> 1;
+  const decks = { p1: match.host_deck, p2: match.guest_deck ?? [] };
   const state: MatchState = {
     ...initMatch(
       seed,
-      { p1: match.host_deck, p2: match.guest_deck ?? [] },
+      decks,
       { p1: match.host_name, p2: match.guest_name ?? 'Rival' },
+      await loadCatalog(admin, [decks.p1, decks.p2]),
     ),
     turnStartedAt: Date.now(),
   };

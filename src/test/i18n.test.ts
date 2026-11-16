@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { LANGUAGES, NAMESPACES, makeTranslator, translate } from '@/i18n';
 import { CARD_DEFINITIONS, SKILLS } from '@/constants';
 import { ENGINE_MESSAGES_ES, applyAction, initMatch } from '@/game/onlineEngine';
+import { BUILTIN_CARDS } from '@/game/catalog';
 
 describe('i18n dictionaries', () => {
   it.each(Object.entries(NAMESPACES))('%s has the same keys in every language', (_ns, messages) => {
@@ -47,10 +48,10 @@ describe('i18n dictionaries', () => {
 
 describe('engine messages', () => {
   const deck = [{ card_id: 'senior-dev', quantity: 20 }];
-  const s = initMatch(1, { p1: deck, p2: deck }, { p1: 'Ana', p2: 'Beto' }, 'p1');
+  const s = initMatch(1, { p1: deck, p2: deck }, { p1: 'Ana', p2: 'Beto' }, BUILTIN_CARDS, 'p1');
 
   it('keeps the Spanish message in sync with the structured one', () => {
-    expect(s.message).toBe('🎯 Empieza Ana');
+    expect(s.message).toMatch(/^🎯 Empieza Ana · 🐛 Aparece /);
     expect(makeTranslator('es').gameMessage(s.msg!)).toBe(s.message);
   });
 
