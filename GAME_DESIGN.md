@@ -17,7 +17,8 @@ Una partida consta de **3 rondas** (best of 3). Cada ronda tiene un **Bug** (ver
 ### Energía ⚡
 
 - Cada turno se reciben **3⚡** de energía; la sobrante se acumula hasta un máximo de **10⚡**.
-- El segundo jugador empieza con 0⚡, así ambos abren con 3⚡ (como compensación, el segundo roba en su primer turno).
+- El segundo jugador empieza con 1⚡, así abre con 4⚡ frente a los 3⚡ de quien empieza (además roba en su primer turno).
+- **Energía de ronda**: al empezar una nueva ronda, cada jugador suma +1⚡ por cada 3 de daño que hizo al Bug en la ronda anterior (máx. +2).
 - **Bonus**: si dañaste al Bug en tu turno (ataque, habilidad o consumible), recibes **+1⚡** extra al empezar tu siguiente turno, aunque el rival le golpee después.
 - La energía se gasta al:
   - **Colocar una carta** de la mano al tablero → gasta el `coste` de invocación de la carta.
@@ -53,13 +54,15 @@ El bot usa el mismo motor que el online (`supabase/functions/_shared/engine.ts`)
 
 ## Bugs 🐛
 
-Cada ronda se elige un Bug del catálogo `BUG_RULES` (determinista a partir de la semilla de la partida y el número de ronda).
+Cada partida baraja el catálogo `BUG_RULES` con su semilla y asigna un Bug distinto a cada ronda (no se repiten).
 
 - **Contraataque**: al final de un turno en el que un jugador ha dañado al Bug, este golpea a la carta con más potencia real de ese jugador (la de más a la izquierda en empate), restando su `potencia` a la cordura. Si llega a 0, la carta se destruye.
 
-| Bug | Vida | Potencia |
-|---|---|---|
-| NullPointer | 10 | 1 |
+| Bug | Vida | Potencia | Estilo que favorece |
+|---|---|---|---|
+| NullPointer | 10 | 1 | Equilibrado |
+| Heisenbug | 9 | 2 | Pocos golpes fuertes (buffs, Senior); castiga golpear con cartas frágiles |
+| Legacy Code | 13 | 0 | Enjambre de cartas baratas; sin contraataque |
 
 ---
 
@@ -126,8 +129,8 @@ Los consumibles son un tercer tipo de carta que **no se coloca en el tablero**. 
 | Carta | Coste | Target | Efecto |
 |---|---|---|---|
 | Café de Máquina ☕ | 1 | Carta aliada | Restaura 3 de cordura |
-| PR Aprobado ✅ | 2 | Carta aliada | +2 potencia por 1 turno |
-| Hotfix de Emergencia 🚑 | 2 | Bug | 2 de daño directo |
+| PR Aprobado ✅ | 1 | Carta aliada | +1 potencia por 1 turno |
+| Hotfix de Emergencia 🚑 | 3 | Bug | 2 de daño directo |
 
 ---
 
@@ -155,23 +158,25 @@ Las habilidades están definidas en un catálogo centralizado (`SKILLS`). Cada c
 
 ## Cartas disponibles
 
+Los datos de las cartas viven en la base de datos (`cards` y `card_skills`) y cada partida guarda una copia al empezar, así que editarlas no afecta a partidas en curso. Las tablas de abajo son los valores oficiales (los de `src/constants/cards.ts`, que también sirven de respaldo sin conexión y para tests/simulador).
+
 ### Programadores
 
 | Carta | Tipo | Pot. | Coste | Atq.Coste | Cordura | Habilidades |
 |---|---|---|---|---|---|---|
 | Junior Dev 👶 | Programador | 1 | 1 | 1 | 2 | — |
 | Mid Dev 💻 | Programador | 2 | 2 | 1 | 3 | — |
-| Senior Dev 🧠 | Programador | 3 | 3 | 1 | 4 | Par Programming (pot:2, coste:2, dur:1) |
-| Fullstack ⚡ | Programador | 2 | 2 | 1 | 3 | Par Programming (pot:1, coste:1, dur:1) |
-| DevOps 🔧 | Programador | 1 | 1 | 1 | 2 | Automatización (pot:2, coste:2, dur:0) |
-| Intern 🎒 | Programador | 1 | 1 | 1 | 2 | — |
+| Senior Dev 🧠 | Programador | 3 | 3 | 1 | 4 | Par Programming (pot:2, coste:1, dur:2) |
+| Fullstack ⚡ | Programador | 2 | 2 | 1 | 3 | Par Programming (pot:2, coste:1, dur:1) |
+| DevOps 🔧 | Programador | 1 | 1 | 1 | 2 | Automatización (pot:3, coste:2, dur:0) |
+| Intern 🎒 | Programador | 1 | 0 | 1 | 1 | — |
 | Architect 🏗️ | Programador | 2 | 3 | 1 | 5 | Par Programming (pot:3, coste:1, dur:1) |
 
 ### QA
 
 | Carta | Tipo | Pot. | Coste | Atq.Coste | Cordura | Habilidades |
 |---|---|---|---|---|---|---|
-| QA Tester 🔍 | QA | 1 | 1 | 1 | 2 | QA Testing (pot:0, coste:1, dur:0) |
+| QA Tester 🔍 | QA | 1 | 1 | 1 | 2 | QA Testing (pot:0, coste:2, dur:0) |
 | QA Lead 🛡️ | QA | 2 | 2 | 1 | 3 | QA Testing (pot:0, coste:2, dur:0) |
 
 ### Consumibles
@@ -179,8 +184,8 @@ Las habilidades están definidas en un catálogo centralizado (`SKILLS`). Cada c
 | Carta | Tipo | Coste | Target | Habilidad |
 |---|---|---|---|---|
 | Café de Máquina ☕ | Consumible | 1 | Carta aliada | Cafeína (pot:3, coste:1, dur:0) |
-| PR Aprobado ✅ | Consumible | 2 | Carta aliada | Motivación (pot:2, coste:2, dur:1) |
-| Hotfix de Emergencia 🚑 | Consumible | 2 | Bug | Parche Rápido (pot:2, coste:2, dur:0) |
+| PR Aprobado ✅ | Consumible | 1 | Carta aliada | Motivación (pot:1, coste:1, dur:1) |
+| Hotfix de Emergencia 🚑 | Consumible | 3 | Bug | Parche Rápido (pot:2, coste:3, dur:0) |
 
 ---
 

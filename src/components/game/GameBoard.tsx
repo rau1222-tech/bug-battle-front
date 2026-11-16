@@ -2,8 +2,9 @@ import { useState, useCallback, useRef, useEffect, type ReactNode } from 'react'
 import { motion, AnimatePresence } from 'framer-motion';
 import { useGameLogic, type GameController } from '@/hooks/useGameLogic';
 import { useGameStats } from '@/hooks/useGameStats';
-import { TABLE_MAX, SKILLS, CARD_DEFINITIONS, calcularPotenciaReal } from '@/constants';
-import { MAX_ROUND_TURNS } from '@/game/onlineEngine';
+import { useCards } from '@/hooks/useCards';
+import { TABLE_MAX, SKILLS, CARD_DEFINITIONS, calcularPotenciaReal, type CardTemplate } from '@/constants';
+import { ENERGY_PER_TURN, MAX_ROUNDS, MAX_ROUND_TURNS, ROUND_BONUS_CAP, ROUND_BONUS_DAMAGE_STEP } from '@/game/onlineEngine';
 import BugCentral from './BugCentral';
 import GameCard from './GameCard';
 import ActionMenu from './ActionMenu';
@@ -32,8 +33,44 @@ type ConsumableDropTarget = 'bug' | 'carta_aliada' | 'carta_enemiga';
 const AUDIO_BY_CARD = new Map(CARD_DEFINITIONS.map((d) => [d.id, d.audio]));
 const ONLINE_REWARD = { win: 150, loss: 50 };
 
-export default function GameBoard({ deckComposition, ...rest }: GameBoardProps) {
-  const game = useGameLogic(deckComposition, rest.playerName);
+/** Upcoming energy: next turn's gain and the bonus carried into the next round (null hides a line). */
+function EnergyForecast({ nextTurn, nextRound }: { nextTurn: number | null; nextRound: number | null }) {
+  const { t } = useI18n();
+  const turnBonus = (nextTurn ?? 0) - ENERGY_PER_TURN;
+  return (
+    <div className="flex flex-col items-end gap-0.5 font-display tabular-nums text-[8px] sm:text-[10px] leading-none">
+      {nextTurn !== null && (
+        <span
+          title={t('game.energy.nextTurn', { base: ENERGY_PER_TURN, bonus: turnBonus })}
+          className={`px-1 py-0.5 rounded-sm bg-black/40 ${turnBonus > 0 ? 'text-amber-300' : 'text-stone-300/70'}`}
+        >
+          ⏭ +{nextTurn}⚡
+        </span>
+      )}
+      {nextRound !== null && (
+        <span
+          title={t('game.energy.nextRound', { step: ROUND_BONUS_DAMAGE_STEP, cap: ROUND_BONUS_CAP })}
+          className={`px-1 py-0.5 rounded-sm bg-black/40 ${nextRound > 0 ? 'text-sky-300' : 'text-stone-300/50'}`}
+        >
+          🔄 +{nextRound}⚡
+        </span>
+      )}
+    </div>
+  );
+}
+
+export default function GameBoard(props: GameBoardProps) {
+  const { cards, loading } = useCards();
+  const { t } = useI18n();
+  // The match snapshots card rules at start, so wait for the database catalog
+  if (loading) {
+    return <div className="min-h-screen flex items-center justify-center font-display text-amber-200/70">{t('common.loading')}</div>;
+  }
+  return <LocalGameBoard {...props} cards={cards} />;
+}
+
+function LocalGameBoard({ deckComposition, cards, ...rest }: GameBoardProps & { cards: CardTemplate[] }) {
+  const game = useGameLogic(deckComposition, cards, rest.playerName);
   return <GameBoardView game={game} {...rest} />;
 }
 
@@ -460,6 +497,10 @@ export function GameBoardView({ game, onExit, playerId, playerName: playerNamePr
           className="flex items-center gap-1.5 sm:gap-2"
         >
           <span className="text-[9px] sm:text-xs font-display text-emerald-300/80 drop-shadow-sm">{playerName}</span>
+          <EnergyForecast
+            nextTurn={game.gamePhase === 'playing' ? game.playerNextTurnGain : null}
+            nextRound={game.roundNumber < MAX_ROUNDS ? game.playerNextRoundBonus : null}
+          />
           <div className="relative w-10 h-10 sm:w-14 sm:h-14 flex items-center justify-center rounded-lg border-2 border-emerald-400/70 bg-gradient-to-b from-emerald-900/80 to-emerald-950/90 shadow-[0_0_18px_rgba(52,211,153,0.25),inset_0_1px_0_rgba(255,255,255,0.1)] backdrop-blur-sm">
             <span className="absolute -top-1.5 sm:-top-2 left-1/2 -translate-x-1/2 text-xs sm:text-sm">⚡</span>
             <span className="text-lg sm:text-2xl font-display font-black text-emerald-300 tabular-nums drop-shadow-[0_0_8px_rgba(52,211,153,0.5)]">
@@ -473,6 +514,10 @@ export function GameBoardView({ game, onExit, playerId, playerName: playerNamePr
         {/* Bot energy */}
         <div className="flex items-center gap-1.5 sm:gap-2">
           <span className="text-[9px] sm:text-xs font-display text-red-300/80 drop-shadow-sm">{opponentName ?? t('game.botUpper')}</span>
+          <EnergyForecast
+            nextTurn={game.gamePhase === 'playing' ? game.botNextTurnGain : null}
+            nextRound={game.roundNumber < MAX_ROUNDS ? game.botNextRoundBonus : null}
+          />
           <div className="relative w-10 h-10 sm:w-14 sm:h-14 flex items-center justify-center rounded-lg border-2 border-red-400/70 bg-gradient-to-b from-red-900/80 to-red-950/90 shadow-[0_0_18px_rgba(239,68,68,0.25),inset_0_1px_0_rgba(255,255,255,0.1)] backdrop-blur-sm">
             <span className="absolute -top-1.5 sm:-top-2 left-1/2 -translate-x-1/2 text-xs sm:text-sm">⚡</span>
             <span className="text-lg sm:text-2xl font-display font-black text-red-300 tabular-nums drop-shadow-[0_0_8px_rgba(239,68,68,0.5)]">
@@ -618,7 +663,7 @@ export function GameBoardView({ game, onExit, playerId, playerName: playerNamePr
 
         {/* CENTER — Bug */}
         <div data-drop-target="bug" className="flex items-center justify-center py-2 relative z-10">
-          <BugCentral complexity={game.bugComplexity} maxComplexity={game.bugMaxComplexity} power={game.bugPower} bugState={game.bugState} id="bug-central" />
+          <BugCentral bugId={game.bugId} complexity={game.bugComplexity} maxComplexity={game.bugMaxComplexity} power={game.bugPower} bugState={game.bugState} id="bug-central" />
           {draggingConsumableTarget === 'bug' && dragOverTargetId === 'bug' && (
             <motion.div
               initial={{ opacity: 0.3, scale: 0.92 }}

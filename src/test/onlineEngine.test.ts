@@ -1,25 +1,30 @@
 import { describe, expect, it } from 'vitest';
 import { CARD_DEFINITIONS, DECK_SIZE, MAX_COPIES, SKILLS } from '@/constants';
 import {
-  CARD_RULES,
   ENERGY_PER_TURN,
   MAX_HAND_SIZE,
   MAX_ROUND_TURNS,
+  ROUND_BONUS_CAP,
+  SECOND_PLAYER_ENERGY,
   SKILL_RULES,
   applyAction,
+  catalogFromRows,
   initMatch,
   matchWinner,
   mulberry32,
+  nextTurnGain,
   other,
   parseAction,
   redactFor,
   replay,
+  roundCarryEnergy,
   type EngineCard,
   type MatchAction,
   type MatchState,
   type Side,
 } from '@/game/onlineEngine';
 import { botNextAction, randomBotDeck } from '@/game/botAI';
+import { BUILTIN_CARDS } from '@/game/catalog';
 
 const deckA = ['senior-dev', 'architect', 'mid-dev', 'fullstack', 'devops', 'junior-dev', 'intern', 'pr-aprobado', 'hotfix', 'qa-tester']
   .map((card_id) => ({ card_id, quantity: 2 }));
@@ -27,15 +32,16 @@ const deckB = ['qa-lead', 'qa-tester', 'senior-dev', 'architect', 'mid-dev', 'fu
   .map((card_id) => ({ card_id, quantity: 2 }));
 const names = { p1: 'Ana', p2: 'Beto' };
 
-const start = (seed = 42, starter: Side = 'p1') => initMatch(seed, { p1: deckA, p2: deckB }, names, starter);
+const start = (seed = 42, starter: Side = 'p1') => initMatch(seed, { p1: deckA, p2: deckB }, names, BUILTIN_CARDS, starter);
 
 const card = (id: string, instanceId: string, patch: Partial<EngineCard> = {}): EngineCard => {
-  const definition = CARD_RULES.find((c) => c.id === id)!;
+  const definition = BUILTIN_CARDS[id];
   return { instanceId, definition, cordura: definition.corduraMax ?? 0, efectosActivos: [], disponible: true, ...patch };
 };
 
 const withTables = (s: MatchState, p1: (EngineCard | null)[], p2: (EngineCard | null)[]): MatchState => ({
   ...s,
+  bug: { id: 'nullpointer', hp: 10, maxHp: 10, potencia: 1 },
   sides: {
     p1: { ...s.sides.p1, table: [...p1, null, null, null, null].slice(0, 4), energy: 10 },
     p2: { ...s.sides.p2, table: [...p2, null, null, null, null].slice(0, 4), energy: 10 },
@@ -104,18 +110,18 @@ describe('onlineEngine', () => {
   });
 
   it('picks the first player from the seed', () => {
-    const starters = new Set([1, 2, 3, 4, 5, 6, 7, 8].map((seed) => initMatch(seed, { p1: deckA, p2: deckB }, names).turn));
+    const starters = new Set([1, 2, 3, 4, 5, 6, 7, 8].map((seed) => initMatch(seed, { p1: deckA, p2: deckB }, names, BUILTIN_CARDS).turn));
     expect(starters).toEqual(new Set(['p1', 'p2']));
   });
 
-  it('opens both first turns with the same energy; only the second player draws', () => {
+  it('opens the second player with extra energy; only the second player draws', () => {
     const s = start();
     expect(s.sides.p1.energy).toBe(ENERGY_PER_TURN);
     const handBefore = s.sides.p2.hand.length;
     const { state } = applyAction(s, { type: 'END_TURN', side: 'p1' });
     expect(state.turn).toBe('p2');
     expect(state.sides.p2.hand.length).toBe(handBefore + 1);
-    expect(state.sides.p2.energy).toBe(ENERGY_PER_TURN);
+    expect(state.sides.p2.energy).toBe(ENERGY_PER_TURN + SECOND_PLAYER_ENERGY);
   });
 
   it('caps energy and pays the hit bonus only once', () => {
@@ -162,8 +168,18 @@ describe('onlineEngine', () => {
   });
 
   it('expires a 1-turn buff at the end of its owner\'s turn, not the rival\'s', () => {
+    let s = withTables(start(), [card('fullstack', 'fs'), card('mid-dev', 'mid')], []);
+    s = applyAction(s, { type: 'USE_SKILL', side: 'p1', cardId: 'fs', skillIndex: 0, targetId: 'mid' }).state;
+    expect(s.sides.p1.table[1]!.efectosActivos).toHaveLength(1);
+    s = applyAction(s, { type: 'END_TURN', side: 'p1' }).state;
+    expect(s.sides.p1.table[1]!.efectosActivos).toHaveLength(0);
+  });
+
+  it('keeps a 2-turn buff for the owner\'s next turn', () => {
     let s = withTables(start(), [card('senior-dev', 'sr'), card('mid-dev', 'mid')], []);
     s = applyAction(s, { type: 'USE_SKILL', side: 'p1', cardId: 'sr', skillIndex: 0, targetId: 'mid' }).state;
+    s = applyAction(s, { type: 'END_TURN', side: 'p1' }).state;
+    s = applyAction(s, { type: 'END_TURN', side: 'p2' }).state;
     expect(s.sides.p1.table[1]!.efectosActivos).toHaveLength(1);
     s = applyAction(s, { type: 'END_TURN', side: 'p1' }).state;
     expect(s.sides.p1.table[1]!.efectosActivos).toHaveLength(0);
@@ -199,12 +215,48 @@ describe('onlineEngine', () => {
     expect(s.lastAttacker).toBe('p1');
   });
 
+  it('uses a different Bug in every round of a match', () => {
+    let s = start(5);
+    const seen = [s.bug.id];
+    for (const winner of ['p1', 'p2'] as Side[]) {
+      s = applyAction({ ...s, gamePhase: 'round-end', lastAttacker: winner }, { type: 'NEXT_ROUND', side: 'p1' }).state;
+      seen.push(s.bug.id);
+    }
+    expect(new Set(seen).size).toBe(3);
+    expect(s.bug.hp).toBe(s.bug.maxHp);
+  });
+
+  it('carries energy into the next round from the damage each side dealt', () => {
+    const base = start();
+    const s: MatchState = {
+      ...base,
+      gamePhase: 'round-end',
+      lastAttacker: 'p1',
+      sides: { p1: { ...base.sides.p1, damage: 7 }, p2: { ...base.sides.p2, damage: 3 } },
+    };
+    expect(roundCarryEnergy(7)).toBe(2);
+    expect(roundCarryEnergy(13)).toBe(ROUND_BONUS_CAP);
+    const { state } = applyAction(s, { type: 'NEXT_ROUND', side: 'p1' });
+    expect(state.sides.p2.energy).toBe(ENERGY_PER_TURN + 1);
+    expect(state.sides.p1.energy).toBe(SECOND_PLAYER_ENERGY + 2);
+  });
+
+  it('forecasts the next-turn energy gain for both sides', () => {
+    let s = withTables(start(), [card('mid-dev', 'a')], []);
+    expect(nextTurnGain(s, 'p1')).toBe(ENERGY_PER_TURN);
+    s = applyAction(s, { type: 'ATTACK_BUG', side: 'p1', cardId: 'a' }).state;
+    expect(nextTurnGain(s, 'p1')).toBe(ENERGY_PER_TURN + 1);
+    s = applyAction(s, { type: 'END_TURN', side: 'p1' }).state;
+    expect(nextTurnGain(redactFor(s, 'p2'), 'p1')).toBe(ENERGY_PER_TURN + 1);
+    expect(nextTurnGain(s, 'p2')).toBe(ENERGY_PER_TURN);
+  });
+
   it('lets either player open the next round, started by the round loser', () => {
     const s: MatchState = { ...start(), gamePhase: 'round-end', lastAttacker: 'p1', turn: 'p1' };
     const r = applyAction(s, { type: 'NEXT_ROUND', side: 'p2' });
     expect(r.error).toBeUndefined();
     expect(r.state.turn).toBe('p2');
-    expect(r.state.sides.p1.energy).toBe(0);
+    expect(r.state.sides.p1.energy).toBe(SECOND_PLAYER_ENERGY);
     expect(r.state.sides.p2.energy).toBe(ENERGY_PER_TURN);
   });
 
@@ -216,14 +268,14 @@ describe('onlineEngine', () => {
 
   it('builds legal bot decks', () => {
     for (let seed = 1; seed < 20; seed++) {
-      const deck = randomBotDeck(mulberry32(seed));
+      const deck = randomBotDeck(BUILTIN_CARDS, mulberry32(seed));
       expect(deck.reduce((n, e) => n + e.quantity, 0)).toBe(DECK_SIZE);
       expect(Math.max(...deck.map((e) => e.quantity))).toBeLessThanOrEqual(MAX_COPIES);
     }
   });
 
   it.each([1, 2, 3])('bot vs bot game %i only plays legal actions and finishes', (seed) => {
-    let s = initMatch(seed, { p1: randomBotDeck(mulberry32(seed)), p2: randomBotDeck(mulberry32(seed + 100)) }, names);
+    let s = initMatch(seed, { p1: randomBotDeck(BUILTIN_CARDS, mulberry32(seed)), p2: randomBotDeck(BUILTIN_CARDS, mulberry32(seed + 100)) }, names, BUILTIN_CARDS);
     for (let i = 0; i < 3000 && s.gamePhase !== 'game-over'; i++) {
       const r = applyAction(s, botNextAction(s, s.turn));
       expect(r.error).toBeUndefined();
@@ -248,7 +300,7 @@ describe('onlineEngine', () => {
 
   it('rejects placing a card without enough energy', () => {
     const s = start();
-    const card = s.sides.p1.hand[0];
+    const card = s.sides.p1.hand.find((c) => c.definition.coste > 0)!;
     const poor = { ...s, sides: { ...s.sides, p1: { ...s.sides.p1, energy: 0 } } };
     const r = applyAction(poor, { type: 'PLACE_CARD', side: 'p1', cardId: card.instanceId, slot: 0 });
     expect(r.error).toMatch(/Necesitas/);
@@ -262,10 +314,41 @@ describe('onlineEngine', () => {
     expect(JSON.stringify(replay(start(seed), log))).toBe(JSON.stringify(final));
   });
 
-  it('server card/skill rules match the client definitions', () => {
-    const rulesOnly = CARD_DEFINITIONS.map(({ image: _i, audio: _a, gachaPeso: _g, ...rest }) => rest);
-    expect(CARD_RULES).toEqual(rulesOnly);
+  it('every built-in card is playable and skills match the client catalog', () => {
+    expect(Object.keys(BUILTIN_CARDS)).toEqual(CARD_DEFINITIONS.map((c) => c.id));
     expect(SKILL_RULES).toEqual(SKILLS);
+  });
+
+  it('builds the catalog from database rows and drops invalid cards', () => {
+    const row = { nombre: 'X', descripcion: null, potencia: 2, coste: 1, ataque_coste: 1, cordura_max: 3 };
+    const catalog = catalogFromRows(
+      [
+        { ...row, id: 'ok', tipo: 'programador' },
+        { ...row, id: 'bad-type', tipo: 'jefe' },
+        { ...row, id: 'bad-skill', tipo: 'programador' },
+        { ...row, id: 'no-sanity', tipo: 'qa', cordura_max: null },
+        { ...row, id: 'potion', tipo: 'consumible', potencia: null, ataque_coste: null, cordura_max: null },
+      ],
+      [
+        { card_id: 'ok', skill_id: 5, potencia: 1, coste: 1, duracion: 0, orden: 1 },
+        { card_id: 'ok', skill_id: 3, potencia: 2, coste: 1, duracion: 1, orden: 0 },
+        { card_id: 'bad-skill', skill_id: 999, potencia: 1, coste: 1, duracion: 0, orden: 0 },
+      ],
+    );
+    expect(Object.keys(catalog)).toEqual(['ok']);
+    expect(catalog.ok.habilidades).toEqual([[3, 2, 1, 1], [5, 1, 1, 0]]);
+    expect(catalog.ok.descripcion).toBe('');
+  });
+
+  it('snapshots only the deck cards and ignores cards missing from the catalog', () => {
+    const catalog = { ...BUILTIN_CARDS };
+    const s = initMatch(1, { p1: [{ card_id: 'mid-dev', quantity: 20 }], p2: [{ card_id: 'ghost', quantity: 5 }, { card_id: 'intern', quantity: 15 }] }, names, catalog, 'p1');
+    expect(Object.keys(s.cards).sort()).toEqual(['intern', 'mid-dev']);
+    expect(s.sides.p2.hand.length + s.sides.p2.deck.length).toBe(15);
+    // Editing the catalog mid-match (a database change) must not leak into the next round
+    catalog['mid-dev'] = { ...catalog['mid-dev'], potencia: 9 };
+    const after = applyAction({ ...s, gamePhase: 'round-end', lastAttacker: 'p1' }, { type: 'NEXT_ROUND', side: 'p1' }).state;
+    expect(after.sides.p1.hand[0].definition.potencia).toBe(2);
   });
 
   it('redacted view hides the rival hand and both deck orders', () => {
