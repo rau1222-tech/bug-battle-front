@@ -19,6 +19,7 @@
 - [Sistema de Efectos](#sistema-de-efectos)
 - [Sistema de Mazos](#sistema-de-mazos)
 - [Sistema Gacha](#sistema-gacha)
+- [Modo Tower Defense](#modo-tower-defense)
 - [Base de Datos](#base-de-datos)
 - [Instalación](#instalación)
 - [Scripts Disponibles](#scripts-disponibles)
@@ -305,6 +306,18 @@ El reclutamiento se hace mediante **banners**: conjuntos de cartas disponibles d
 - **Copias máximas por carta**: 2 (igual que el máximo por mazo). Si en un sobre sale una carta de la que ya tienes 2, se convierte automáticamente en oro según su rareza: Común 5 🪙, Rara 10 🪙, Épica 20 🪙, Legendaria 100 🪙. Se calcula en la base de datos (`public.duplicate_gold(gacha_peso)`) y se muestra al revelar la carta.
 - **Fases**: Selección de banner → Animación de apertura → Revelación con flip de cartas.
 - La colección y las monedas se guardan en Supabase (`player_collection`, `players.gold`).
+
+---
+
+## Modo Tower Defense
+
+Ruta `/tower-defense` (botón 🛡️ en el menú principal). Los bugs avanzan por 3 carriles hacia tu PC (10 ❤️) y las cartas del **mazo activo** que hacen daño (programadores/QA con potencia y consumibles de daño directo) los atacan.
+
+- **Puntos ⭐**: empiezas con 10; cada bug eliminado da entre 1 y 5 (aleatorio) y además ganas 1 ⭐ cada 3 s. Colocar una carta cuesta `2 + coste×2`.
+- **Tablero**: máximo 6 cartas a la vez. Los bugs muerden la carta que les bloquea (su cordura es su vida). Las habilidades de daño directo se disparan cada 3 ataques; los consumibles de daño golpean todo un carril (recarga de 8 s).
+- **Dificultad**: sube de nivel cada 20 s: más bugs, más rápidos, que muerden más fuerte y con vida que crece de forma cuadrática; desde el nivel 1 aparece Heisenbug y desde el 2 Legacy Code.
+- **Recompensa**: cada 5 bugs = 1 🪙 (oro del gacha), abonado por `public.claim_tower_defense_coins()` en cuanto se gana (límite por tiempo de partida y 200 🪙/día). Se guarda también el récord (`players.td_best_kills`).
+- **Balance**: `npm run sim:td -- 100` simula partidas con un bot (referencia actual: ~2,3 min, nivel ~8, ~42 bugs y ~8 🪙 por partida, sin muertes antes de 90 s).
 
 ---
 

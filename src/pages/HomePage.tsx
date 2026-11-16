@@ -137,6 +137,14 @@ export default function HomePage() {
               desc={t('home.myDecksDesc')}
               className="min-h-[110px] bg-gradient-to-b from-emerald-600/30 to-emerald-900/30 hover:from-emerald-500/40 hover:to-emerald-800/40 border-emerald-500/25 hover:border-emerald-400/40 text-emerald-100 shadow-[0_0_15px_-5px_hsl(150,80%,45%,0.2)] hover:shadow-[0_0_20px_-5px_hsl(150,80%,45%,0.4)]"
             />
+            <MenuTile
+              onClick={() => navigate(ROUTES.TOWER_DEFENSE)}
+              icon="🛡️"
+              title={t('home.towerDefense')}
+              desc={t('home.towerDefenseDesc')}
+              className="col-span-2 sm:col-span-4 min-h-[64px] bg-gradient-to-r from-amber-600/30 to-red-900/30 hover:from-amber-500/40 hover:to-red-800/40 border-amber-500/25 hover:border-amber-400/40 text-amber-100 shadow-[0_0_15px_-5px_hsl(35,90%,55%,0.25)] hover:shadow-[0_0_20px_-5px_hsl(35,90%,55%,0.45)]"
+              inline
+            />
             {profile.admin && (
               <MenuTile
                 onClick={() => navigate(ROUTES.CARD_CREATE)}

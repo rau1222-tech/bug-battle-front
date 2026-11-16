@@ -412,6 +412,7 @@ export type Database = {
           gold: number
           id: string
           losses: number
+          td_best_kills: number
           updated_at: string
           wins: number
         }
@@ -426,6 +427,7 @@ export type Database = {
           gold?: number
           id: string
           losses?: number
+          td_best_kills?: number
           updated_at?: string
           wins?: number
         }
@@ -440,6 +442,7 @@ export type Database = {
           gold?: number
           id?: string
           losses?: number
+          td_best_kills?: number
           updated_at?: string
           wins?: number
         }
@@ -488,6 +491,10 @@ export type Database = {
       add_cards_to_collection: {
         Args: { p_card_ids: string[]; p_user_id: string }
         Returns: undefined
+      }
+      claim_tower_defense_coins: {
+        Args: { p_final?: boolean; p_kills: number; p_run_id: string }
+        Returns: Json
       }
       cancel_random_match: {
         Args: Record<PropertyKey, never>
@@ -576,6 +583,10 @@ export type Database = {
       spend_coins: {
         Args: { p_amount: number; p_user_id: string }
         Returns: number
+      }
+      start_tower_defense_run: {
+        Args: Record<PropertyKey, never>
+        Returns: string
       }
       submit_match_action: {
         Args: { p_action: Json; p_match_id: string; p_seq: number }

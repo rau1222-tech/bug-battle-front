@@ -10,6 +10,7 @@ export const ROUTES = {
   CARD_CREATE: '/cards/create',
   ONLINE: '/online',
   MATCH: '/match/:matchId',
+  TOWER_DEFENSE: '/tower-defense',
 } as const;
 
 export function matchPath(matchId: string) {

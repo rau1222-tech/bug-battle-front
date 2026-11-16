@@ -21,6 +21,7 @@ import MatchPage from "./pages/MatchPage";
 import NotFound from "./pages/NotFound.tsx";
 
 const CardCreatePage = lazy(() => import("./pages/CardCreatePage"));
+const TowerDefensePage = lazy(() => import("./pages/TowerDefensePage"));
 
 const queryClient = new QueryClient();
 
@@ -58,6 +59,14 @@ const App = () => (
             <Route path={ROUTES.GACHA} element={<GachaPage />} />
             <Route path={ROUTES.ONLINE} element={<OnlinePage />} />
             <Route path={ROUTES.MATCH} element={<MatchPage />} />
+            <Route
+              path={ROUTES.TOWER_DEFENSE}
+              element={(
+                <Suspense fallback={<PageLoading />}>
+                  <TowerDefensePage />
+                </Suspense>
+              )}
+            />
             <Route
               path={ROUTES.CARD_CREATE}
               element={(
