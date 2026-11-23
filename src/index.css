@@ -188,10 +188,162 @@
   .box-glow-purple {
     box-shadow: var(--glow-purple);
   }
+  /* Card box driven by --card-w (set on the game board); inner text scales with cqw */
+  .game-card {
+    width: var(--card-w, 7rem);
+    height: calc(var(--card-w, 7rem) * 1.4);
+    container-type: inline-size;
+  }
   .bg-grid-pattern {
     background-image: 
       linear-gradient(hsl(200 30% 20% / 0.3) 1px, transparent 1px),
       linear-gradient(90deg, hsl(200 30% 20% / 0.3) 1px, transparent 1px);
     background-size: 40px 40px;
   }
+}
+
+/* ===== Game board animated backdrop ===== */
+.board-grid {
+  background-image:
+    linear-gradient(rgba(251, 191, 36, 0.05) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(251, 191, 36, 0.05) 1px, transparent 1px);
+  background-size: 48px 48px;
+  -webkit-mask-image: radial-gradient(ellipse at center, #000 25%, transparent 75%);
+  mask-image: radial-gradient(ellipse at center, #000 25%, transparent 75%);
+  animation: board-grid-pan 14s linear infinite;
+}
+@keyframes board-grid-pan {
+  to { transform: translate3d(48px, 48px, 0); }
+}
+
+.board-token {
+  opacity: 0;
+  animation: board-token-rise linear infinite;
+  will-change: transform, opacity;
+}
+@keyframes board-token-rise {
+  0% { transform: translate3d(0, 0, 0); opacity: 0; }
+  12% { opacity: var(--o, 0.1); }
+  85% { opacity: var(--o, 0.1); }
+  100% { transform: translate3d(var(--dx, 0), -115vh, 0); opacity: 0; }
+}
+
+.board-packet {
+  animation: board-packet-run linear infinite;
+}
+@keyframes board-packet-run {
+  from { transform: translateX(-10vw); }
+  to { transform: translateX(110vw); }
+}
+
+.board-scan {
+  animation: board-scan-sweep 11s linear infinite;
+}
+@keyframes board-scan-sweep {
+  from { transform: translateY(-30vh); }
+  to { transform: translateY(105vh); }
+}
+
+/* Bug SVG faces up, so rotate() is the heading (0deg = north) */
+.board-bug {
+  opacity: 0.55;
+  animation-timing-function: linear;
+  animation-iteration-count: infinite;
+  will-change: transform;
+}
+.board-bug-a { animation-name: bug-crawl-a; }
+.board-bug-b { animation-name: bug-crawl-b; }
+.board-bug-c { animation-name: bug-crawl-c; }
+.board-bug-d { animation-name: bug-crawl-d; }
+@keyframes bug-crawl-a {
+  0% { transform: translate(-6vw, 24vh) rotate(75deg); }
+  25% { transform: translate(22vw, 15vh) rotate(110deg); }
+  50% { transform: translate(48vw, 30vh) rotate(70deg); }
+  75% { transform: translate(76vw, 18vh) rotate(105deg); }
+  100% { transform: translate(106vw, 27vh) rotate(90deg); }
+}
+@keyframes bug-crawl-b {
+  0% { transform: translate(106vw, 74vh) rotate(-75deg); }
+  33% { transform: translate(70vw, 83vh) rotate(-105deg); }
+  66% { transform: translate(34vw, 70vh) rotate(-80deg); }
+  100% { transform: translate(-6vw, 79vh) rotate(-90deg); }
+}
+@keyframes bug-crawl-c {
+  0% { transform: translate(7vw, -6vh) rotate(170deg); }
+  50% { transform: translate(14vw, 50vh) rotate(190deg); }
+  100% { transform: translate(5vw, 106vh) rotate(175deg); }
+}
+@keyframes bug-crawl-d {
+  0% { transform: translate(91vw, 106vh) rotate(-8deg); }
+  50% { transform: translate(85vw, 50vh) rotate(10deg); }
+  100% { transform: translate(93vw, -8vh) rotate(-5deg); }
+}
+.board-bug-body {
+  animation: bug-sway 0.6s ease-in-out infinite alternate;
+}
+.board-bug-legs-l,
+.board-bug-legs-r {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: bug-legs 0.25s ease-in-out infinite alternate;
+}
+.board-bug-legs-r { animation-delay: -0.125s; }
+@keyframes bug-sway {
+  from { transform: rotate(-5deg); }
+  to { transform: rotate(5deg); }
+}
+@keyframes bug-legs {
+  from { transform: rotate(-9deg); }
+  to { transform: rotate(9deg); }
+}
+
+/* ===== Field card rarity frames ===== */
+@property --frame-angle {
+  syntax: '<angle>';
+  initial-value: 0deg;
+  inherits: false;
+}
+.frame-legendary {
+  animation: frame-spin 6s linear infinite;
+}
+@keyframes frame-spin {
+  to { --frame-angle: 360deg; }
+}
+.frame-sheen {
+  background: linear-gradient(115deg, transparent 35%, rgba(255, 255, 255, 0.55) 50%, transparent 65%);
+  background-size: 250% 100%;
+  animation: frame-sheen 3.5s ease-in-out infinite;
+  mix-blend-mode: overlay;
+}
+@keyframes frame-sheen {
+  0% { background-position: 120% 0; }
+  60%, 100% { background-position: -120% 0; }
+}
+.card-holo {
+  background: linear-gradient(120deg, transparent 30%, rgba(253, 230, 138, 0.35) 45%, rgba(244, 114, 182, 0.25) 52%, rgba(125, 211, 252, 0.3) 58%, transparent 72%);
+  background-size: 300% 100%;
+  animation: frame-sheen 5s ease-in-out infinite;
+  mix-blend-mode: color-dodge;
+}
+.card-twinkle {
+  animation: card-twinkle 2.1s ease-in-out infinite;
+}
+@keyframes card-twinkle {
+  0%, 100% { opacity: 0; transform: scale(0.4); }
+  50% { opacity: 1; transform: scale(1); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .board-grid, .board-token, .board-packet, .board-scan, .board-bug,
+  .board-bug-body, .board-bug-legs-l, .board-bug-legs-r,
+  .frame-legendary, .frame-sheen, .card-holo, .card-twinkle {
+    animation: none;
+  }
+  .board-token, .board-bug { opacity: 0; }
+}
+html[data-reduce-motion='true'] .board-token,
+html[data-reduce-motion='true'] .board-bug,
+html[data-reduce-motion='true'] .board-packet,
+html[data-reduce-motion='true'] .board-scan {
+  display: none;
 }

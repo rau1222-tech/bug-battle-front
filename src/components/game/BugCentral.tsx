@@ -33,9 +33,10 @@ export default function BugCentral({ bugId, complexity, maxComplexity, power, bu
   }, [bugState]);
 
   return (
-    <div id={id} className="flex flex-col items-center gap-1.5 sm:gap-3">
+    <div id={id} className="flex flex-col items-center gap-1 sm:gap-1.5">
       <motion.div
-        className="relative w-24 h-24 sm:w-40 sm:h-40 md:w-56 md:h-56 flex items-center justify-center"
+        className="relative flex items-center justify-center"
+        style={{ width: 'var(--bug-size, 14rem)', height: 'var(--bug-size, 14rem)' }}
         animate={
           bugState === 'hit'
             ? { x: [0, -14, 14, -7, 7, 0], scale: [1, 0.85, 1.15, 1], opacity: 1 }
@@ -86,7 +87,10 @@ export default function BugCentral({ bugId, complexity, maxComplexity, power, bu
       </motion.div>
 
       {/* HP Bar — warm tones to match desk */}
-      <div className="w-24 sm:w-40 md:w-56 h-2 sm:h-3 md:h-3.5 rounded-full bg-black/40 overflow-hidden border border-amber-900/30">
+      <div
+        className="h-2 sm:h-2.5 rounded-full bg-black/50 overflow-hidden border border-amber-900/40 shadow-inner"
+        style={{ width: 'var(--bug-size, 14rem)' }}
+      >
         <motion.div
           className={`h-full rounded-full ${
             hpPercent > 60 ? 'bg-emerald-500' : hpPercent > 30 ? 'bg-amber-500' : 'bg-red-500'
@@ -95,7 +99,7 @@ export default function BugCentral({ bugId, complexity, maxComplexity, power, bu
           transition={{ type: 'spring', stiffness: 300, damping: 25 }}
         />
       </div>
-      <span className="text-[9px] sm:text-[11px] md:text-xs font-display text-amber-200/50 tracking-wider">
+      <span className="text-[9px] sm:text-[11px] font-display text-amber-200/60 tracking-wider whitespace-nowrap">
         {bugName} · {t('game.complexity', { current: complexity, max: maxComplexity })}
         {power > 0 && <> · ⚔️ {power}</>}
       </span>

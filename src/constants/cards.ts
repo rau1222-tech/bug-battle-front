@@ -169,6 +169,8 @@ export const MAX_HAND_SIZE = 6;
 export const MAX_ENERGY_CAP = 10;
 export const ENERGY_PER_TURN = 3;
 export const ENERGY_BONUS_HIT = 1;
+/** Hold time before a pressed card opens its detail view. */
+export const CARD_INSPECT_HOLD_MS = 450;
 
 export interface CardInstance {
   instanceId: string;

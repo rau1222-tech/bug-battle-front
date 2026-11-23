@@ -28,7 +28,7 @@ export default function ActionLog({ entries }: ActionLogProps) {
         {/* Floating button */}
         <button
           onClick={() => setExpanded(true)}
-          className="absolute bottom-[23%] left-2 z-20 flex items-center gap-1.5 px-2.5 py-1.5 rounded-full bg-black/60 backdrop-blur-sm border border-amber-900/40 shadow-lg shadow-black/40 active:scale-95 transition-transform"
+          className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-full bg-black/60 border border-amber-900/40 shadow-lg shadow-black/40 active:scale-95 transition-transform"
           aria-label={t('game.log.open')}
         >
           <ScrollText className="w-3.5 h-3.5 text-amber-300/80" />
@@ -114,8 +114,8 @@ export default function ActionLog({ entries }: ActionLogProps) {
 
   // ===== DESKTOP =====
   return (
-    <div className="fixed bottom-3 left-3 z-20 w-[24%] max-w-[300px] pointer-events-auto">
-      <div className="bg-black/45 backdrop-blur-sm border border-amber-900/30 rounded-lg shadow-lg shadow-black/40 overflow-hidden">
+    <div className="w-full max-w-[280px]">
+      <div className="bg-black/45 border border-amber-900/30 rounded-lg shadow-lg shadow-black/40 overflow-hidden">
         <button
           onClick={() => setExpanded((v) => !v)}
           className="w-full flex items-center justify-between px-2.5 py-1.5 border-b border-amber-900/30 hover:bg-amber-900/20 transition-colors"
@@ -148,7 +148,7 @@ export default function ActionLog({ entries }: ActionLogProps) {
             >
               <div
                 ref={scrollRef}
-                className="max-h-48 overflow-y-auto px-2.5 py-1.5 space-y-1"
+                className="max-h-[calc(var(--bug-size,14rem)-1rem)] overflow-y-auto px-2.5 py-1.5 space-y-1"
               >
                 <AnimatePresence initial={false}>
                   {entries.map((entry, i) => {

@@ -1,18 +1,22 @@
-import { useState, useCallback, useRef, useEffect, type ReactNode } from 'react';
+import { useState, useCallback, useRef, useEffect, type CSSProperties, type ReactNode } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { DoorOpen, Settings as SettingsIcon, Volume2, VolumeX } from 'lucide-react';
 import { useGameLogic, type GameController } from '@/hooks/useGameLogic';
 import { useGameStats } from '@/hooks/useGameStats';
 import { useCards } from '@/hooks/useCards';
-import { TABLE_MAX, SKILLS, CARD_DEFINITIONS, calcularPotenciaReal, type CardTemplate } from '@/constants';
-import { ENERGY_PER_TURN, MAX_ROUNDS, MAX_ROUND_TURNS, ROUND_BONUS_CAP, ROUND_BONUS_DAMAGE_STEP } from '@/game/onlineEngine';
+import { SKILLS, CARD_DEFINITIONS, CARD_INSPECT_HOLD_MS, calcularPotenciaReal, type CardInstance, type CardTemplate } from '@/constants';
+import { MAX_ROUNDS, MAX_ROUND_TURNS } from '@/game/onlineEngine';
 import BugCentral from './BugCentral';
 import GameCard from './GameCard';
-import ActionMenu from './ActionMenu';
+import ActionMenu, { type CardAction } from './ActionMenu';
 import DeckPile from './DeckPile';
 import ActionLog from './ActionLog';
-import boardBg from '@/assets/game-board-bg.png';
+import { EndTurnButton, EnergyPanel, HudIconButton, OpponentHand, Scoreboard, TurnBanner } from './BoardHud';
+import BoardBackground from './BoardBackground';
+import CardInspector from './CardInspector';
+import SettingsDialog from '@/components/auth/SettingsDialog';
 import { useI18n } from '@/i18n';
-import { getSettings } from '@/lib/settings';
+import { getSettings, updateSettings, useSettings } from '@/lib/settings';
 
 interface GameBoardProps {
   onExit: () => void;
@@ -32,33 +36,21 @@ type SelectionPhase =
 type ConsumableDropTarget = 'bug' | 'carta_aliada' | 'carta_enemiga';
 
 const AUDIO_BY_CARD = new Map(CARD_DEFINITIONS.map((d) => [d.id, d.audio]));
+/** Pointer travel that turns a press on a hand card into a drag. */
+const DRAG_THRESHOLD_PX = 6;
 const ONLINE_REWARD = { win: 150, loss: 50 };
 
-/** Upcoming energy: next turn's gain and the bonus carried into the next round (null hides a line). */
-function EnergyForecast({ nextTurn, nextRound }: { nextTurn: number | null; nextRound: number | null }) {
-  const { t } = useI18n();
-  const turnBonus = (nextTurn ?? 0) - ENERGY_PER_TURN;
-  return (
-    <div className="flex flex-col items-end gap-0.5 font-display tabular-nums text-[8px] sm:text-[10px] leading-none">
-      {nextTurn !== null && (
-        <span
-          title={t('game.energy.nextTurn', { base: ENERGY_PER_TURN, bonus: turnBonus })}
-          className={`px-1 py-0.5 rounded-sm bg-black/40 ${turnBonus > 0 ? 'text-amber-300' : 'text-stone-300/70'}`}
-        >
-          ⏭ +{nextTurn}⚡
-        </span>
-      )}
-      {nextRound !== null && (
-        <span
-          title={t('game.energy.nextRound', { step: ROUND_BONUS_DAMAGE_STEP, cap: ROUND_BONUS_CAP })}
-          className={`px-1 py-0.5 rounded-sm bg-black/40 ${nextRound > 0 ? 'text-sky-300' : 'text-stone-300/50'}`}
-        >
-          🔄 +{nextRound}⚡
-        </span>
-      )}
-    </div>
-  );
-}
+/** Card rows take ~4.5 card-widths of height, the Bug gets what is left; ~15rem is reserved for HUD rows. */
+const BOARD_VARS = {
+  '--card-w': 'clamp(2.75rem, min(10.5vw, calc((100dvh - 15rem) / 5.7)), 7.25rem)',
+  '--bug-size': 'clamp(4rem, min(20dvh, calc(100dvh - 15rem - var(--card-w) * 4.5)), 12rem)',
+} as CSSProperties;
+
+/** Card badges stick out ~4% per side and the legendary crown ~11% on top. */
+const TABLE_SPACING: CSSProperties = {
+  gap: 'calc(var(--card-w) * 0.12)',
+  padding: 'calc(var(--card-w) * 0.1) calc(var(--card-w) * 0.06) calc(var(--card-w) * 0.04)',
+};
 
 export default function GameBoard(props: GameBoardProps) {
   const { cards, loading } = useCards();
@@ -88,7 +80,7 @@ interface GameBoardViewProps {
 }
 
 export function GameBoardView({ game, onExit, playerId, playerName: playerNameProp, opponentName, online = false, banner }: GameBoardViewProps) {
-  const { t, skillName, skillDescription } = useI18n();
+  const { t, cardName, skillName, skillDescription } = useI18n();
   const playerName = playerNameProp ?? t('game.defaultPlayerName');
   const { recordResult } = useGameStats(playerId);
   const isPlayerTurn = game.turn === 'player';
@@ -96,6 +88,9 @@ export function GameBoardView({ game, onExit, playerId, playerName: playerNamePr
   const canAct = isPlayerTurn && !game.busy;
   const [selection, setSelection] = useState<SelectionPhase>({ type: 'none' });
   const [showExitConfirm, setShowExitConfirm] = useState(false);
+  const [showSettings, setShowSettings] = useState(false);
+  const settings = useSettings();
+  const [turnBannerKey, setTurnBannerKey] = useState(1);
   const [reward, setReward] = useState<number | null>(null);
   const [now, setNow] = useState(() => Date.now());
   const tableRef = useRef<HTMLDivElement>(null);
@@ -110,7 +105,15 @@ export function GameBoardView({ game, onExit, playerId, playerName: playerNamePr
   const dragOverSlotRef = useRef<number | null>(null);
   const draggingConsumableTargetRef = useRef<ConsumableDropTarget | null>(null);
   const dragOverTargetIdRef = useRef<string | 'bug' | null>(null);
+  /** Hand card pressed but not dragged yet: becomes a drag on move, an inspect on hold, a tap on release. */
+  const pressRef = useRef<{ cardId: string; x: number; y: number; timer: number } | null>(null);
   const gameOverRecordedRef = useRef(false);
+
+  const [inspect, setInspect] = useState<{ card: CardInstance; side: 'ally' | 'enemy' } | null>(null);
+  const inspectAlly = useCallback((card: CardInstance) => setInspect({ card, side: 'ally' }), []);
+  const inspectEnemy = useCallback((card: CardInstance) => setInspect({ card, side: 'enemy' }), []);
+  const closeInspect = useCallback(() => setInspect(null), []);
+  useEffect(() => () => window.clearTimeout(pressRef.current?.timer), []);
 
   // Action log — one entry per message key, so repeated texts are still logged
   const [logEntries, setLogEntries] = useState<{ id: number; text: string }[]>([]);
@@ -189,53 +192,45 @@ export function GameBoardView({ game, onExit, playerId, playerName: playerNamePr
     ? game.playerTable.find(c => c?.instanceId === selection.cardId) ?? null
     : null;
 
-  const getActionsForCard = () => {
+  const getActionsForCard = (): CardAction[] => {
     if (!selectedCard) return [];
-    if (!selectedCard.disponible) {
-      return [{ id: 'unavailable', label: t('game.action.unavailable'), description: t('game.action.unavailableDesc') }];
-    }
-    const actions: { id: string; label: string; description: string }[] = [];
     const def = selectedCard.definition;
-    const attackCost = def.ataqueCoste ?? 0;
-    const power = calcularPotenciaReal(selectedCard);
-    const hasEnergy = game.playerEnergy >= attackCost;
-    // Basic attack — programadores attack bugs, QAs attack enemy cards
-    if (power > 0) {
-      if (def.tipo === 'programador') {
-        actions.push({
-          id: 'attack-bug',
-          label: t('game.action.attackBug', { power, cost: attackCost }),
-          description: hasEnergy ? t('game.action.attackBugDesc') : t('game.action.needEnergy', { cost: attackCost }),
-        });
-      }
-      if (def.tipo === 'qa') {
-        const hasEnemies = game.botTable.some(c => c !== null);
-        if (hasEnemies) {
-          actions.push({
-            id: 'attack-enemy',
-            label: t('game.action.attackEnemy', { power, cost: attackCost }),
-            description: hasEnergy ? t('game.action.attackEnemyDesc') : t('game.action.needEnergy', { cost: attackCost }),
-          });
-        }
-      }
+    const energy = game.playerEnergy;
+    const used = selectedCard.disponible ? undefined : t('game.menu.used');
+    const hasEnemies = game.botTable.some((c) => c !== null);
+    const hasAllies = game.playerTable.some((c) => c !== null && c.instanceId !== selectedCard.instanceId);
+    const blockReason = (cost: number, hasTargets: boolean) =>
+      used ?? (!hasTargets ? t('game.menu.noTargets') : energy < cost ? t('game.menu.noEnergy', { cost }) : undefined);
+
+    const actions: CardAction[] = [];
+    // Basic attack — programadores attack the Bug, QAs attack enemy cards
+    if (def.tipo === 'programador' || def.tipo === 'qa') {
+      const isQa = def.tipo === 'qa';
+      const attackCost = def.ataqueCoste ?? 0;
+      const power = calcularPotenciaReal(selectedCard);
+      actions.push({
+        id: isQa ? 'attack-enemy' : 'attack-bug',
+        icon: isQa ? 'qa-attack' : 'attack',
+        name: isQa ? t('game.inspect.attackEnemy') : t('game.inspect.attackBug'),
+        description: isQa ? t('game.action.attackEnemyDesc') : t('game.action.attackBugDesc'),
+        cost: attackCost,
+        power,
+        blocked: used ?? (power <= 0 ? t('game.menu.noPower') : blockReason(attackCost, isQa ? hasEnemies : true)),
+      });
     }
-    // Special skills
-    def.habilidades.forEach(([skillId, potencia, coste], idx) => {
+    def.habilidades.forEach(([skillId, potencia, coste, duracion], idx) => {
       const skill = SKILLS[skillId];
       if (!skill) return;
-      if (skill.objetivo === 'carta_enemiga') {
-        const hasEnemyTargets = game.botTable.some((c) => c !== null);
-        if (!hasEnemyTargets) return;
-      }
-      if (skill.objetivo === 'carta_aliada') {
-        const hasAllyTargets = game.playerTable.some((c) => c !== null && c.instanceId !== selectedCard.instanceId);
-        if (!hasAllyTargets) return;
-      }
-      const canAfford = game.playerEnergy >= coste;
+      const hasTargets = skill.objetivo === 'carta_enemiga' ? hasEnemies : skill.objetivo === 'carta_aliada' ? hasAllies : true;
       actions.push({
         id: `skill-${skillId}-${idx}`,
-        label: t('game.action.skill', { name: skillName(skill), power: potencia, cost: coste }),
-        description: canAfford ? skillDescription(skill) : t('game.action.needEnergy', { cost: coste }),
+        icon: skill.objetivo,
+        name: skillName(skill),
+        description: skillDescription(skill),
+        cost: coste,
+        power: potencia > 0 ? potencia : undefined,
+        duration: duracion > 0 ? duracion : undefined,
+        blocked: blockReason(coste, hasTargets),
       });
     });
     return actions;
@@ -283,8 +278,6 @@ export function GameBoardView({ game, onExit, playerId, playerName: playerNamePr
       setSelection({ type: 'none' });
     } else if (actionId === 'attack-enemy') {
       setSelection({ type: 'picking-enemy', cardId: selectedCard.instanceId, actionType: 'attack-enemy' });
-    } else if (actionId === 'unavailable') {
-      setSelection({ type: 'none' });
     } else if (actionId.startsWith('skill-')) {
       const parts = actionId.split('-');
       const skillId = Number(parts[1]);
@@ -308,6 +301,7 @@ export function GameBoardView({ game, onExit, playerId, playerName: playerNamePr
   const [prevTurn, setPrevTurn] = useState(turn);
   if (turn !== prevTurn) {
     setPrevTurn(turn);
+    setTurnBannerKey((k) => k + 1);
     if (selection.type !== 'none') setSelection({ type: 'none' });
   }
 
@@ -385,6 +379,40 @@ export function GameBoardView({ game, onExit, playerId, playerName: playerNamePr
     setDragOverTargetId(null);
   }, []);
 
+  const selectConsumable = useCallback((card: CardInstance) => {
+    if (!canAct) return;
+    const skill = SKILLS[card.definition.habilidades[0]?.[0]];
+    if (!skill) return;
+    if (skill.objetivo === 'bug') {
+      game.playerUseConsumable(card.instanceId);
+    } else if (skill.objetivo === 'carta_aliada') {
+      setSelection({ type: 'consumable-picking-ally', cardId: card.instanceId });
+    } else if (skill.objetivo === 'carta_enemiga') {
+      setSelection({ type: 'consumable-picking-enemy', cardId: card.instanceId });
+    }
+  }, [canAct, game]);
+
+  const startDrag = useCallback((cardId: string, x: number, y: number) => {
+    const card = game.playerHand.find((c) => c.instanceId === cardId);
+    if (!card) return;
+    if (card.definition.tipo === 'consumible') {
+      const habilidad = card.definition.habilidades[0];
+      const skill = habilidad ? SKILLS[habilidad[0]] : null;
+      if (!skill) return;
+      draggingConsumableTargetRef.current = skill.objetivo;
+      setDraggingConsumableTarget(skill.objetivo);
+    } else {
+      draggingConsumableTargetRef.current = null;
+      setDraggingConsumableTarget(null);
+    }
+    draggingCardIdRef.current = cardId;
+    setDraggingCardId(cardId);
+    setDragPos({ x, y });
+    // Prevent page scroll while dragging on touch
+    document.body.style.userSelect = 'none';
+    document.body.style.touchAction = 'none';
+  }, [game.playerHand]);
+
   const handlePointerDownCard = useCallback((e: React.PointerEvent, cardId: string) => {
     if (!canAct || game.gamePhase !== 'playing') return;
     const card = game.playerHand.find((c) => c.instanceId === cardId);
@@ -396,325 +424,172 @@ export function GameBoardView({ game, onExit, playerId, playerName: playerNamePr
     // Only main button for mouse; touch/pen are always allowed
     if (e.pointerType === 'mouse' && e.button !== 0) return;
 
-    if (isConsumible) {
-      const habilidad = card.definition.habilidades[0];
-      const skill = habilidad ? SKILLS[habilidad[0]] : null;
-      if (!skill) return;
-      draggingConsumableTargetRef.current = skill.objetivo;
-      setDraggingConsumableTarget(skill.objetivo);
-    } else {
-      draggingConsumableTargetRef.current = null;
-      setDraggingConsumableTarget(null);
-    }
-
     e.preventDefault();
     (e.currentTarget as HTMLElement).setPointerCapture?.(e.pointerId);
-    draggingCardIdRef.current = cardId;
-    setDraggingCardId(cardId);
-    setDragPos({ x: e.clientX, y: e.clientY });
-    // Prevent page scroll while dragging on touch
-    document.body.style.userSelect = 'none';
-    document.body.style.touchAction = 'none';
+    window.clearTimeout(pressRef.current?.timer);
+    const timer = window.setTimeout(() => {
+      pressRef.current = null;
+      setInspect({ card, side: 'ally' });
+    }, CARD_INSPECT_HOLD_MS);
+    pressRef.current = { cardId, x: e.clientX, y: e.clientY, timer };
   }, [canAct, game.gamePhase, game.playerTable, game.playerHand]);
 
   const handlePointerMoveCard = useCallback((e: React.PointerEvent) => {
+    const press = pressRef.current;
+    if (press) {
+      if (Math.hypot(e.clientX - press.x, e.clientY - press.y) < DRAG_THRESHOLD_PX) return;
+      window.clearTimeout(press.timer);
+      pressRef.current = null;
+      startDrag(press.cardId, e.clientX, e.clientY);
+    }
     if (!draggingCardIdRef.current) return;
     e.preventDefault();
     setDragPos({ x: e.clientX, y: e.clientY });
     updateDragOverFromPoint(e.clientX, e.clientY);
-  }, [updateDragOverFromPoint]);
+  }, [startDrag, updateDragOverFromPoint]);
 
   const handlePointerUpCard = useCallback((e: React.PointerEvent) => {
+    const press = pressRef.current;
+    if (press) {
+      // Quick tap: consumables can also be used by tapping then picking a target
+      window.clearTimeout(press.timer);
+      pressRef.current = null;
+      const card = game.playerHand.find((c) => c.instanceId === press.cardId);
+      if (card?.definition.tipo === 'consumible') selectConsumable(card);
+      return;
+    }
     if (!draggingCardIdRef.current) return;
     e.preventDefault();
     // Final hit-test (in case pointer was captured and didn't fire move at end)
     updateDragOverFromPoint(e.clientX, e.clientY);
     endDrag(true);
-  }, [endDrag, updateDragOverFromPoint]);
+  }, [endDrag, updateDragOverFromPoint, game.playerHand, selectConsumable]);
 
   const handlePointerCancelCard = useCallback(() => {
+    window.clearTimeout(pressRef.current?.timer);
+    pressRef.current = null;
     if (!draggingCardIdRef.current) return;
     endDrag(false);
   }, [endDrag]);
 
 
+  const isPlaying = game.gamePhase === 'playing';
+  const opponentLabel = opponentName ?? t('game.bot');
+  const tableFull = game.playerTable.every(Boolean);
+  const pickingEnemy = selection.type === 'picking-enemy' || selection.type === 'consumable-picking-enemy' || draggingConsumableTarget === 'carta_enemiga';
+  const pickingAlly = selection.type === 'picking-ally' || selection.type === 'consumable-picking-ally' || draggingConsumableTarget === 'carta_aliada';
+  const draggingToSlot = draggingCardId !== null && draggingConsumableTarget === null;
+
+  const targetHint = draggingConsumableTarget === 'bug'
+    ? t('game.hint.dropBug')
+    : draggingConsumableTarget === 'carta_aliada'
+      ? t('game.hint.dropAlly')
+      : draggingConsumableTarget === 'carta_enemiga'
+        ? t('game.hint.dropEnemy')
+        : selection.type === 'consumable-picking-ally'
+          ? t('game.hint.consumableAlly')
+          : selection.type === 'consumable-picking-enemy'
+            ? t('game.hint.consumableEnemy')
+            : selection.type === 'picking-ally'
+              ? t('game.hint.skillAlly')
+              : selection.type === 'picking-enemy'
+                ? selection.actionType === 'attack-enemy' ? t('game.hint.attackEnemy') : t('game.hint.skillEnemy')
+                : null;
+  const statusText = targetHint
+    ?? (!isPlaying ? '' : isPlayerTurn
+      ? t('game.handHint', { name: playerName, count: game.playerHand.length })
+      : t('game.waitingRival', { name: opponentLabel }));
+
+  // Nothing left to afford: nudge the player towards ending the turn
+  const hasAffordableMove = game.playerHand.some((c) => c.definition.coste <= game.playerEnergy && (c.definition.tipo === 'consumible' || !tableFull))
+    || game.playerTable.some((c) => c !== null && c.disponible && (
+      (calcularPotenciaReal(c) > 0 && (c.definition.ataqueCoste ?? 0) <= game.playerEnergy)
+      || c.definition.habilidades.some(([, , coste]) => coste <= game.playerEnergy)
+    ));
+
   return (
-    <div
-      className="fixed inset-0 w-full h-full overflow-hidden"
-      style={{
-        backgroundImage: `url(${boardBg})`,
-        backgroundSize: 'cover',
-        backgroundPosition: 'center',
-      }}
-    >
-      {/* ===== HUD ===== */}
-      <div className="absolute top-0 left-0 right-0 z-20 flex items-center justify-between px-2 sm:px-6 py-2 sm:py-3 gap-2">
-        <button
-          onClick={() => setShowExitConfirm(true)}
-          className="text-[10px] sm:text-sm font-display text-amber-200/70 hover:text-amber-100 transition-colors bg-black/30 backdrop-blur-sm px-2 sm:px-3 py-1 sm:py-1.5 rounded-lg border border-amber-900/30 shrink-0"
-        >
-          {t('game.exit')}
-        </button>
-
-        {/* Turn indicator */}
-        <motion.div
-          key={game.turn}
-          initial={{ scale: 0.8, opacity: 0 }}
-          animate={{ scale: 1, opacity: 1 }}
-          className={`text-[10px] sm:text-base font-display font-bold px-2 sm:px-6 py-1 sm:py-2 rounded-lg sm:rounded-xl backdrop-blur-sm border transition-all whitespace-nowrap ${
-            isPlayerTurn
-              ? 'bg-emerald-900/50 text-emerald-300 border-emerald-500/40 shadow-[0_0_20px_hsl(150_60%_40%/0.3)]'
-              : 'bg-red-900/50 text-red-400 border-red-500/40 shadow-[0_0_20px_hsl(0_60%_40%/0.3)]'
-          }`}
-        >
-          {isPlayerTurn
-            ? (selection.type === 'picking-enemy'
-              || selection.type === 'picking-ally'
-              || selection.type === 'consumable-picking-ally'
-              || selection.type === 'consumable-picking-enemy'
-              || draggingConsumableTarget !== null)
-              ? t('game.target')
-              : `🟢 ${playerName.toUpperCase()}`
-            : `🔴 ${opponentName ? opponentName.toUpperCase() : t('game.rivalUpper')}`}
-          {secondsLeft !== null && game.gamePhase === 'playing' && (
-            <span className={`ml-2 tabular-nums ${secondsLeft <= 15 ? 'text-red-300 animate-pulse' : 'opacity-70'}`}>⏱{secondsLeft}s</span>
-          )}
-        </motion.div>
-
-        <div className="flex items-center gap-1.5 sm:gap-4 text-[11px] sm:text-base font-display bg-black/30 backdrop-blur-sm px-2 sm:px-4 py-1 sm:py-1.5 rounded-lg border border-amber-900/30 shrink-0">
-          <span className="text-emerald-400">{game.playerScore}</span>
-          <span className="text-amber-200/50 text-[9px] sm:text-xs"           title={t('game.roundTooltip')}>
-                      {t('game.roundCounter', { round: game.roundNumber, turns: game.roundTurns, max: MAX_ROUND_TURNS })}
-          </span>
-          <span className="text-red-400">{game.botScore}</span>
-        </div>
-      </div>
-
-      {/* ===== Energy indicators ===== */}
-      <div className="absolute top-11 sm:top-14 right-2 sm:right-6 z-20 flex flex-col items-end gap-1.5 sm:gap-2">
-        {/* Player energy */}
-        <motion.div
-          key={`p-energy-${game.playerEnergy}-${game.playerMaxEnergy}`}
-          initial={{ scale: 1.2 }}
-          animate={{ scale: 1 }}
-          transition={{ type: 'spring', stiffness: 300, damping: 18 }}
-          className="flex items-center gap-1.5 sm:gap-2"
-        >
-          <span className="text-[9px] sm:text-xs font-display text-emerald-300/80 drop-shadow-sm">{playerName}</span>
-          <EnergyForecast
-            nextTurn={game.gamePhase === 'playing' ? game.playerNextTurnGain : null}
-            nextRound={game.roundNumber < MAX_ROUNDS ? game.playerNextRoundBonus : null}
-          />
-          <div className="relative w-10 h-10 sm:w-14 sm:h-14 flex items-center justify-center rounded-lg border-2 border-emerald-400/70 bg-gradient-to-b from-emerald-900/80 to-emerald-950/90 shadow-[0_0_18px_rgba(52,211,153,0.25),inset_0_1px_0_rgba(255,255,255,0.1)] backdrop-blur-sm">
-            <span className="absolute -top-1.5 sm:-top-2 left-1/2 -translate-x-1/2 text-xs sm:text-sm">⚡</span>
-            <span className="text-lg sm:text-2xl font-display font-black text-emerald-300 tabular-nums drop-shadow-[0_0_8px_rgba(52,211,153,0.5)]">
-              {game.playerEnergy}
-            </span>
-            <span className="absolute -bottom-1 sm:-bottom-1.5 left-1/2 -translate-x-1/2 text-[7px] sm:text-[9px] font-display text-emerald-400/60 tabular-nums bg-emerald-950/80 px-1 rounded-sm">
-              /{game.playerMaxEnergy}
-            </span>
-          </div>
-        </motion.div>
-        {/* Bot energy */}
-        <div className="flex items-center gap-1.5 sm:gap-2">
-          <span className="text-[9px] sm:text-xs font-display text-red-300/80 drop-shadow-sm">{opponentName ?? t('game.botUpper')}</span>
-          <EnergyForecast
-            nextTurn={game.gamePhase === 'playing' ? game.botNextTurnGain : null}
-            nextRound={game.roundNumber < MAX_ROUNDS ? game.botNextRoundBonus : null}
-          />
-          <div className="relative w-10 h-10 sm:w-14 sm:h-14 flex items-center justify-center rounded-lg border-2 border-red-400/70 bg-gradient-to-b from-red-900/80 to-red-950/90 shadow-[0_0_18px_rgba(239,68,68,0.25),inset_0_1px_0_rgba(255,255,255,0.1)] backdrop-blur-sm">
-            <span className="absolute -top-1.5 sm:-top-2 left-1/2 -translate-x-1/2 text-xs sm:text-sm">⚡</span>
-            <span className="text-lg sm:text-2xl font-display font-black text-red-300 tabular-nums drop-shadow-[0_0_8px_rgba(239,68,68,0.5)]">
-              {game.botEnergy}
-            </span>
-            <span className="absolute -bottom-1 sm:-bottom-1.5 left-1/2 -translate-x-1/2 text-[7px] sm:text-[9px] font-display text-red-400/60 tabular-nums bg-red-950/80 px-1 rounded-sm">
-              /{game.botMaxEnergy}
-            </span>
-          </div>
-        </div>
-      </div>
-
-      {/* ===== Picking-target hint pill (only when choosing QA target) ===== */}
-      <AnimatePresence>
-        {(
-          selection.type === 'picking-enemy'
-          || selection.type === 'picking-ally'
-          || selection.type === 'consumable-picking-ally'
-          || selection.type === 'consumable-picking-enemy'
-          || draggingConsumableTarget !== null
-        ) && (
-          <motion.div
-            initial={{ opacity: 0, y: -8 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: 8 }}
-            className="absolute top-11 sm:top-16 left-1/2 -translate-x-1/2 z-20 max-w-[95%]"
-          >
-            <span className="text-[9px] sm:text-xs font-body text-amber-100/90 bg-black/50 backdrop-blur-sm px-2 sm:px-4 py-1 sm:py-1.5 rounded-full border border-amber-500/40 whitespace-nowrap">
-              {draggingConsumableTarget === 'bug'
-                ? t('game.hint.dropBug')
-                : draggingConsumableTarget === 'carta_aliada'
-                  ? t('game.hint.dropAlly')
-                  : draggingConsumableTarget === 'carta_enemiga'
-                    ? t('game.hint.dropEnemy')
-                    : selection.type === 'consumable-picking-ally'
-                      ? t('game.hint.consumableAlly')
-                      : selection.type === 'consumable-picking-enemy'
-                        ? t('game.hint.consumableEnemy')
-                    : selection.type === 'picking-ally'
-                ? t('game.hint.skillAlly')
-                : selection.type === 'picking-enemy' && selection.actionType === 'attack-enemy'
-                  ? t('game.hint.attackEnemy')
-                  : t('game.hint.skillEnemy')}
-            </span>
-          </motion.div>
-        )}
-      </AnimatePresence>
-
-      {/* ===== Action log (bottom-left) ===== */}
-      <ActionLog entries={logEntries} />
-
-      {banner && (
-        <div className="absolute top-24 sm:top-28 left-1/2 -translate-x-1/2 z-40 max-w-[90%]">{banner}</div>
-      )}
-
-      {/* ===== DECK ===== */}
-      <div className="absolute left-[1%] sm:left-[4%] top-[35%] -translate-y-1/2 z-10 flex flex-col items-center gap-3 sm:gap-8">
-        <DeckPile count={game.botDeckCount} label={opponentName ?? t('game.botUpper')} />
-        <DeckPile count={game.playerDeckCount} label={playerName} />
-      </div>
-
-      {/* ===== Skip turn button — bigger, on right edge of mat ===== */}
-      {isPlayerTurn && game.gamePhase === 'playing' && (
-        <motion.button
-          initial={{ opacity: 0, x: 30 }}
-          animate={{ opacity: 1, x: 0 }}
-          whileHover={{ scale: 1.05 }}
-          whileTap={{ scale: 0.97 }}
-          onClick={game.skipTurn}
-          disabled={game.busy}
-          className="absolute right-[1%] sm:right-[2%] top-1/2 -translate-y-1/2 z-30 font-display font-bold text-[10px] sm:text-base tracking-wide disabled:opacity-60
-            px-2 sm:px-5 py-3 sm:py-6 rounded-xl sm:rounded-2xl
-            bg-gradient-to-b from-amber-600/90 to-amber-800/90 text-amber-50
-            border-2 border-amber-400/60
-            shadow-[0_8px_24px_rgba(0,0,0,0.5),inset_0_1px_0_rgba(255,255,255,0.2)]
-            hover:from-amber-500/90 hover:to-amber-700/90 hover:border-amber-300/80
-            transition-all flex flex-col items-center gap-0.5 sm:gap-1 leading-tight"
-        >
-          <span className="text-base sm:text-2xl">⏭️</span>
-          <span>{t('game.skipTurnLine1')}</span>
-          <span>{t('game.skipTurnLine2')}</span>
-        </motion.button>
-      )}
-
-      {/* ===== PLAY AREA on the mat ===== */}
+    <div className="fixed inset-0 overflow-hidden flex flex-col bg-[#0a0807] select-none" style={BOARD_VARS}>
+      <BoardBackground isPlayerTurn={isPlayerTurn} pulseKey={turnBannerKey} />
       <div
-        className="absolute flex flex-col top-[9%] bottom-[24%] left-[14%] right-[14%] sm:top-[7%] sm:bottom-[26%] sm:left-[18%] sm:right-[14%]"
-      >
+        aria-hidden
+        className="absolute inset-1 sm:inset-2 rounded-xl sm:rounded-2xl border border-amber-700/25 shadow-[inset_0_0_60px_rgba(0,0,0,0.6),inset_0_1px_0_rgba(255,255,255,0.04)] pointer-events-none"
+      />
 
-        {/* BOT TABLE — slot-based */}
-        <div className="flex-1 flex flex-col justify-end pb-2">
-          <div className="text-[10px] font-display text-amber-200/30 uppercase tracking-[0.3em] mb-2 text-center">
-            {opponentName ?? t('game.bot')}
-          </div>
-          <div className={`flex items-end justify-center gap-1 sm:gap-3 min-h-[5rem] sm:min-h-[7rem] md:min-h-[10rem] px-1 sm:px-4 transition-all duration-300 ${
-            selection.type === 'picking-enemy'
-            || selection.type === 'consumable-picking-enemy'
-            || draggingConsumableTarget === 'carta_enemiga'
-              ? 'ring-2 ring-red-500/50 rounded-xl bg-red-900/10'
-              : ''
-          }`}>
-            {game.botTable.map((card, i) => (
-              <div
-                key={`bot-slot-${i}`}
-                data-drop-target={card ? 'enemy-card' : undefined}
-                data-card-id={card?.instanceId}
-                className="relative w-[3.6rem] h-[5rem] sm:w-[5rem] sm:h-[7rem] md:w-[7rem] md:h-[9.8rem] flex items-end justify-center"
-              >
-                {card ? (
-                  <>
-                    <GameCard
-                      card={card}
-                      isOpponent
-                      index={i}
-                      selected={false}
-                      disabled={selection.type !== 'picking-enemy' && selection.type !== 'consumable-picking-enemy'}
-                      onSelect={selection.type === 'picking-enemy' || selection.type === 'consumable-picking-enemy' ? handleBotCardSelect : undefined}
-                    />
-                    {game.botHighlightId === card.instanceId && (
-                      <motion.div
-                        initial={{ opacity: 0, scale: 0.9 }}
-                        animate={{ opacity: 1, scale: [1, 1.05, 1] }}
-                        transition={{ scale: { duration: 1, repeat: Infinity } }}
-                        className="absolute -inset-2 rounded-xl border-2 border-amber-300 shadow-[0_0_28px_rgba(252,211,77,0.7)] pointer-events-none z-10"
-                      />
-                    )}
-                    {draggingConsumableTarget === 'carta_enemiga' && dragOverTargetId === card.instanceId && (
-                      <motion.div
-                        initial={{ opacity: 0.3, scale: 0.92 }}
-                        animate={{ opacity: 1, scale: [1, 1.06, 1] }}
-                        transition={{ scale: { duration: 0.8, repeat: Infinity } }}
-                        className="absolute -inset-2 rounded-xl border-2 border-cyan-300 shadow-[0_0_24px_rgba(34,211,238,0.7)] pointer-events-none z-10"
-                      />
-                    )}
-                  </>
-                ) : (
-                  <div className="w-full h-full rounded-lg border-2 border-dashed border-amber-600/25 bg-amber-900/5" />
-                )}
-              </div>
-            ))}
-          </div>
+      {/* ===== TOP BAR ===== */}
+      <header className="relative shrink-0 flex items-center justify-between gap-2 px-3 sm:px-5 pt-2.5 sm:pt-4">
+        <div className="flex-1 basis-0 flex items-center">
+          <HudIconButton label={t('game.leave.confirm')} onClick={() => setShowExitConfirm(true)}>
+            <DoorOpen className="w-4 h-4 sm:w-5 sm:h-5" />
+          </HudIconButton>
         </div>
-
-        {/* CENTER — Bug */}
-        <div data-drop-target="bug" className="flex items-center justify-center py-2 relative z-10">
-          <BugCentral bugId={game.bugId} complexity={game.bugComplexity} maxComplexity={game.bugMaxComplexity} power={game.bugPower} bugState={game.bugState} id="bug-central" />
-          {draggingConsumableTarget === 'bug' && dragOverTargetId === 'bug' && (
-            <motion.div
-              initial={{ opacity: 0.3, scale: 0.92 }}
-              animate={{ opacity: 1, scale: [1, 1.06, 1] }}
-              transition={{ scale: { duration: 0.8, repeat: Infinity } }}
-              className="absolute inset-0 rounded-full border-2 border-cyan-300 shadow-[0_0_28px_rgba(34,211,238,0.8)] pointer-events-none"
-            />
-          )}
+        <Scoreboard
+          playerName={playerName}
+          opponentName={opponentLabel}
+          playerScore={game.playerScore}
+          opponentScore={game.botScore}
+          round={game.roundNumber}
+          roundLabel={t('game.roundCounter', { round: game.roundNumber, turns: game.roundTurns, max: MAX_ROUND_TURNS })}
+          roundTooltip={t('game.roundTooltip')}
+          isPlayerTurn={isPlayerTurn}
+        />
+        <div className="flex-1 basis-0 flex items-center justify-end gap-1.5 sm:gap-2">
+          <HudIconButton
+            label={settings.soundEnabled ? t('game.mute') : t('game.unmute')}
+            onClick={() => updateSettings({ soundEnabled: !settings.soundEnabled })}
+          >
+            {settings.soundEnabled ? <Volume2 className="w-4 h-4 sm:w-5 sm:h-5" /> : <VolumeX className="w-4 h-4 sm:w-5 sm:h-5 text-red-300" />}
+          </HudIconButton>
+          <HudIconButton label={t('game.settings')} onClick={() => setShowSettings(true)}>
+            <SettingsIcon className="w-4 h-4 sm:w-5 sm:h-5 transition-transform duration-500 group-hover:rotate-90" />
+          </HudIconButton>
         </div>
+      </header>
 
-        {/* PLAYER TABLE — 4 independent slot drop zones */}
-        <div className="flex-1 flex flex-col justify-start pt-2">
-          <div ref={tableRef} className="flex items-start justify-center gap-1 sm:gap-3 min-h-[5rem] sm:min-h-[7rem] md:min-h-[10rem] px-1 sm:px-4 relative">
-            {game.playerTable.map((card, i) => {
-              const isHovered = draggingConsumableTarget === null && dragOverSlot === i;
-              const isOccupied = card !== null;
-              return (
+      {banner && <div className="relative shrink-0 flex justify-center px-2 pt-1.5">{banner}</div>}
+
+      {/* ===== BOARD MAT ===== */}
+      <main className="relative flex-1 min-h-0 flex justify-center px-1.5 sm:px-4">
+        <div className="relative w-full max-w-[100rem] h-full flex flex-col">
+          {/* OPPONENT SIDE */}
+          <section className="relative flex-1 grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-end gap-1.5 sm:gap-4 px-1.5 sm:px-5 pt-2 sm:pt-3">
+            <div className="justify-self-start flex flex-col sm:flex-row items-center sm:items-end gap-1.5 sm:gap-3">
+              <DeckPile count={game.botDeckCount} label={t('game.deck')} side="opponent" />
+              <OpponentHand count={game.botHandCount} />
+            </div>
+            <div
+              className={`flex items-end justify-center rounded-xl transition-all duration-300 ${
+                pickingEnemy ? 'ring-2 ring-red-500/60 bg-red-900/15 shadow-[0_0_30px_rgba(239,68,68,0.25)]' : ''
+              }`}
+              style={TABLE_SPACING}
+            >
+              {game.botTable.map((card, i) => (
                 <div
-                  key={`slot-${i}`}
-                  data-slot-index={!isOccupied ? i : undefined}
-                  data-drop-target={card ? 'ally-card' : undefined}
+                  key={`bot-slot-${i}`}
+                  data-drop-target={card ? 'enemy-card' : undefined}
                   data-card-id={card?.instanceId}
-                  className={`relative w-[3.6rem] h-[5rem] sm:w-[5rem] sm:h-[7rem] md:w-[7rem] md:h-[9.8rem] rounded-lg transition-all duration-200 ${
-                    isOccupied
-                      ? ''
-                      : `border-2 border-dashed bg-amber-900/5 flex items-center justify-center ${
-                          isHovered
-                            ? 'border-amber-400/80 bg-amber-700/20 shadow-[0_0_18px_rgba(217,180,103,0.35)] scale-105'
-                            : 'border-amber-600/40'
-                        }`
-                  } ${selection.type === 'consumable-picking-ally' || draggingConsumableTarget === 'carta_aliada' ? 'ring-2 ring-cyan-500/50 rounded-xl bg-cyan-900/10' : ''}`}
+                  className="game-card relative flex items-end justify-center"
                 >
-                  {isOccupied ? (
+                  {card ? (
                     <>
                       <GameCard
-                        card={card!}
+                        key={card.instanceId}
+                        card={card}
+                        isOpponent
                         index={i}
-                        disabled={
-                          !isPlayerTurn
-                          || selection.type === 'picking-enemy'
-                          || selection.type === 'consumable-picking-enemy'
-                          || (selection.type === 'picking-ally' && selection.cardId === card!.instanceId)
-                        }
-                        selected={selection.type === 'card-selected' && selection.cardId === card!.instanceId}
-                        onSelect={selection.type === 'picking-ally' || selection.type === 'consumable-picking-ally' ? handleAllyCardSelect : handleTableCardSelect}
+                        selected={false}
+                        disabled={selection.type !== 'picking-enemy' && selection.type !== 'consumable-picking-enemy'}
+                        onSelect={selection.type === 'picking-enemy' || selection.type === 'consumable-picking-enemy' ? handleBotCardSelect : undefined}
+                        onInspect={inspectEnemy}
                       />
-                      {draggingConsumableTarget === 'carta_aliada' && dragOverTargetId === card.instanceId && (
+                      {game.botHighlightId === card.instanceId && (
+                        <motion.div
+                          initial={{ opacity: 0, scale: 0.9 }}
+                          animate={{ opacity: 1, scale: [1, 1.05, 1] }}
+                          transition={{ scale: { duration: 1, repeat: Infinity } }}
+                          className="absolute -inset-2 rounded-xl border-2 border-amber-300 shadow-[0_0_28px_rgba(252,211,77,0.7)] pointer-events-none z-10"
+                        />
+                      )}
+                      {draggingConsumableTarget === 'carta_enemiga' && dragOverTargetId === card.instanceId && (
                         <motion.div
                           initial={{ opacity: 0.3, scale: 0.92 }}
                           animate={{ opacity: 1, scale: [1, 1.06, 1] }}
@@ -722,143 +597,241 @@ export function GameBoardView({ game, onExit, playerId, playerName: playerNamePr
                           className="absolute -inset-2 rounded-xl border-2 border-cyan-300 shadow-[0_0_24px_rgba(34,211,238,0.7)] pointer-events-none z-10"
                         />
                       )}
-                      {game.playerTargetHighlightId === card!.instanceId && (
-                        <motion.div
-                          initial={{ opacity: 0, scale: 0.9 }}
-                          animate={{ opacity: 1, scale: [1, 1.08, 1] }}
-                          transition={{ scale: { duration: 0.7, repeat: Infinity } }}
-                          className="absolute -inset-2 rounded-xl border-2 border-red-500 shadow-[0_0_30px_rgba(239,68,68,0.8)] pointer-events-none z-10"
-                        />
-                      )}
-                      <AnimatePresence>
-                        {selection.type === 'card-selected' && selection.cardId === card!.instanceId && (
-                          <ActionMenu
-                            actions={getActionsForCard()}
-                            onSelect={handleAction}
-                            onCancel={cancelSelection}
-                            position="bottom"
-                          />
-                        )}
-                      </AnimatePresence>
                     </>
                   ) : (
-                    <span className="text-amber-300/30 text-[10px] font-display tracking-wider">
-                      {i + 1}
-                    </span>
+                    <div className="w-full h-full rounded-lg border-2 border-dashed border-rose-900/30 bg-black/10" />
                   )}
                 </div>
-              );
-            })}
-          </div>
-          <div className="text-[10px] font-display text-amber-200/30 uppercase tracking-[0.3em] mt-1 text-center">
-            {playerName} ({game.playerTable.filter(Boolean).length}/{TABLE_MAX})
-          </div>
-        </div>
-      </div>
+              ))}
+            </div>
+            <div className="justify-self-end">
+              <EnergyPanel
+                name={opponentLabel}
+                energy={game.botEnergy}
+                max={game.botMaxEnergy}
+                tone="opponent"
+                active={!isPlayerTurn && isPlaying}
+                nextTurn={isPlaying ? game.botNextTurnGain : null}
+                nextRound={game.roundNumber < MAX_ROUNDS ? game.botNextRoundBonus : null}
+              />
+            </div>
+          </section>
 
-      {/* ===== BOT HAND — compact indicator at top ===== */}
-      <div className="absolute top-[8%] sm:top-[7%] left-1/2 -translate-x-1/2 z-10">
-        <div className="flex items-center gap-2">
-          {/* Mini stacked cards */}
-          <div className="relative w-8 h-11 sm:w-10 sm:h-14">
-            {Array.from({ length: Math.min(game.botHandCount, 3) }).map((_, i) => (
-              <div
-                key={i}
-                className="absolute rounded-md overflow-hidden border border-amber-900/60 shadow-md"
-                style={{
-                  width: '100%',
-                  height: '100%',
-                  top: -i * 2,
-                  left: -i * 1.5,
-                  zIndex: i,
-                  background:
-                    'repeating-linear-gradient(45deg, hsl(30 35% 18%), hsl(30 35% 18%) 4px, hsl(30 40% 22%) 4px, hsl(30 40% 22%) 8px)',
-                }}
-              >
-                <div className="absolute inset-1 rounded-sm border border-amber-700/40 flex items-center justify-center">
-                  <span className="text-amber-300/50 text-xs sm:text-sm select-none">🐛</span>
-                </div>
-                <div className="absolute inset-0 bg-gradient-to-br from-amber-100/5 via-transparent to-black/30 pointer-events-none" />
-              </div>
-            ))}
+          {/* CENTRE LANE — log · Bug · end turn, all on the divider line */}
+          <div className="relative shrink-0 grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-1.5 sm:gap-4 px-1.5 sm:px-5 py-1 sm:py-2">
+            <div
+              aria-hidden
+              className="absolute inset-x-3 sm:inset-x-8 top-1/2 h-px bg-gradient-to-r from-transparent via-amber-100/60 to-transparent shadow-[0_0_14px_rgba(253,230,138,0.7)] pointer-events-none"
+            />
+            <div className="relative justify-self-start w-full min-w-0 flex">
+              <ActionLog entries={logEntries} />
+            </div>
+            <div data-drop-target="bug" className="relative z-10 flex items-center justify-center">
+              <BugCentral bugId={game.bugId} complexity={game.bugComplexity} maxComplexity={game.bugMaxComplexity} power={game.bugPower} bugState={game.bugState} id="bug-central" />
+              {draggingConsumableTarget === 'bug' && (
+                <motion.div
+                  initial={{ opacity: 0.3, scale: 0.92 }}
+                  animate={{ opacity: dragOverTargetId === 'bug' ? 1 : 0.45, scale: [1, 1.06, 1] }}
+                  transition={{ scale: { duration: 0.8, repeat: Infinity } }}
+                  className="absolute inset-0 rounded-full border-2 border-cyan-300 shadow-[0_0_28px_rgba(34,211,238,0.8)] pointer-events-none"
+                />
+              )}
+            </div>
+            <div className="relative justify-self-end">
+              <EndTurnButton
+                isPlayerTurn={isPlayerTurn && isPlaying}
+                disabled={game.busy}
+                urgent={!hasAffordableMove}
+                secondsLeft={isPlaying ? secondsLeft : null}
+                onClick={game.skipTurn}
+              />
+            </div>
           </div>
-          {/* Count badge */}
-          <motion.div
-            key={game.botHandCount}
-            initial={{ scale: 1.3 }}
-            animate={{ scale: 1 }}
-            transition={{ type: 'spring', stiffness: 300, damping: 15 }}
-            className="flex items-center gap-1.5 bg-black/50 backdrop-blur-sm px-2.5 py-1 rounded-full border border-amber-900/40"
-          >
-            <span className="text-[9px] sm:text-[10px] font-display text-amber-200/50 uppercase tracking-wider">{t('game.rival')}</span>
-            <span className="text-xs sm:text-sm font-display text-amber-100 font-bold tabular-nums">×{game.botHandCount}</span>
-          </motion.div>
-        </div>
-      </div>
 
-      {/* ===== PLAYER HAND — drag only ===== */}
-      <div className="absolute bottom-0 left-0 right-0 z-15 h-[22%]">
-        <div className="w-full h-full flex flex-col items-center justify-center">
-          <div className="text-[8px] sm:text-[10px] font-display text-amber-200/40 uppercase tracking-[0.2em] sm:tracking-[0.3em] mb-1 sm:mb-2 px-2 text-center">
-            {t('game.handHint', { name: playerName, count: game.playerHand.length })}
-          </div>
-          <div className="flex items-center justify-center gap-1 sm:gap-2 px-2 sm:px-8">
-            <AnimatePresence>
-              {game.playerHand.map((card, i) => {
-                const tableFull = game.playerTable.every(Boolean);
-                const isConsumible = card.definition.tipo === 'consumible';
-                const canDrag = isPlayerTurn && (isConsumible || !tableFull);
-                const isDragging = draggingCardId === card.instanceId;
+          {/* PLAYER SIDE */}
+          <section className="relative flex-1 grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-start gap-1.5 sm:gap-4 px-1.5 sm:px-5 pb-2 sm:pb-3">
+            <div className="justify-self-start">
+              <DeckPile count={game.playerDeckCount} label={t('game.deck')} side="player" />
+            </div>
+            <div
+              ref={tableRef}
+              className={`flex items-start justify-center rounded-xl transition-all duration-300 ${
+                pickingAlly ? 'ring-2 ring-cyan-500/60 bg-cyan-900/15 shadow-[0_0_30px_rgba(34,211,238,0.2)]' : ''
+              }`}
+              style={TABLE_SPACING}
+            >
+              {game.playerTable.map((card, i) => {
+                const isHovered = draggingToSlot && dragOverSlot === i;
                 return (
-                  <motion.div
-                    key={card.instanceId}
-                    layout
-                    initial={{ opacity: 0, y: 40, scale: 0.8 }}
-                    animate={{
-                      opacity: isDragging ? 0 : 1,
-                      y: 0,
-                      scale: 1,
-                    }}
-                    exit={{ opacity: 0, y: -30, scale: 0.8 }}
-                    transition={{ type: 'spring', stiffness: 300, damping: 25, delay: i * 0.05 }}
-                    whileHover={canDrag && !isDragging ? { y: -12, scale: 1.08, transition: { duration: 0.2 } } : {}}
-                    onPointerDown={canDrag ? (e) => handlePointerDownCard(e, card.instanceId) : undefined}
-                    onPointerMove={isDragging ? handlePointerMoveCard : undefined}
-                    onPointerUp={isDragging ? handlePointerUpCard : undefined}
-                    onPointerCancel={isDragging ? handlePointerCancelCard : undefined}
-                    className={`select-none touch-none ${
-                      canDrag ? 'cursor-grab active:cursor-grabbing' : 'opacity-50 cursor-default'
+                  <div
+                    key={`slot-${i}`}
+                    data-slot-index={card ? undefined : i}
+                    data-drop-target={card ? 'ally-card' : undefined}
+                    data-card-id={card?.instanceId}
+                    className={`game-card relative rounded-lg transition-all duration-200 ${
+                      card
+                        ? ''
+                        : `border-2 border-dashed flex items-center justify-center ${
+                            isHovered
+                              ? 'border-amber-300 bg-amber-500/20 shadow-[0_0_22px_rgba(252,211,77,0.45)] scale-105'
+                              : draggingToSlot
+                                ? 'border-amber-400/60 bg-amber-500/10 animate-pulse'
+                                : 'border-amber-600/30 bg-black/10'
+                          }`
                     }`}
-                    style={isDragging ? { width: 0, marginLeft: '-0.5rem', marginRight: '-0.5rem' } : undefined}
                   >
-                    <GameCard
-                      card={card}
-                      index={i}
-                      disabled={!canDrag}
-                      selected={false}
-                      inHand
-                      onSelect={card.definition.tipo === 'consumible' ? (cardId) => {
-                        if (!canAct) return;
-                        const skill = SKILLS[card.definition.habilidades[0]?.[0]];
-                        if (!skill) return;
-                        if (skill.objetivo === 'bug') {
-                          game.playerUseConsumable(cardId);
-                        } else if (skill.objetivo === 'carta_aliada') {
-                          setSelection({ type: 'consumable-picking-ally', cardId });
-                        } else if (skill.objetivo === 'carta_enemiga') {
-                          setSelection({ type: 'consumable-picking-enemy', cardId });
-                        }
-                      } : undefined}
-                    />
-                  </motion.div>
+                    {card ? (
+                      <>
+                        <GameCard
+                          key={card.instanceId}
+                          card={card}
+                          index={i}
+                          disabled={
+                            !isPlayerTurn
+                            || selection.type === 'picking-enemy'
+                            || selection.type === 'consumable-picking-enemy'
+                            || (selection.type === 'picking-ally' && selection.cardId === card.instanceId)
+                          }
+                          selected={selection.type === 'card-selected' && selection.cardId === card.instanceId}
+                          onSelect={selection.type === 'picking-ally' || selection.type === 'consumable-picking-ally' ? handleAllyCardSelect : handleTableCardSelect}
+                          onInspect={inspectAlly}
+                        />
+                        {draggingConsumableTarget === 'carta_aliada' && dragOverTargetId === card.instanceId && (
+                          <motion.div
+                            initial={{ opacity: 0.3, scale: 0.92 }}
+                            animate={{ opacity: 1, scale: [1, 1.06, 1] }}
+                            transition={{ scale: { duration: 0.8, repeat: Infinity } }}
+                            className="absolute -inset-2 rounded-xl border-2 border-cyan-300 shadow-[0_0_24px_rgba(34,211,238,0.7)] pointer-events-none z-10"
+                          />
+                        )}
+                        {game.playerTargetHighlightId === card.instanceId && (
+                          <motion.div
+                            initial={{ opacity: 0, scale: 0.9 }}
+                            animate={{ opacity: 1, scale: [1, 1.08, 1] }}
+                            transition={{ scale: { duration: 0.7, repeat: Infinity } }}
+                            className="absolute -inset-2 rounded-xl border-2 border-red-500 shadow-[0_0_30px_rgba(239,68,68,0.8)] pointer-events-none z-10"
+                          />
+                        )}
+                        <AnimatePresence>
+                          {selection.type === 'card-selected' && selection.cardId === card.instanceId && (
+                            <ActionMenu
+                              anchorId={card.instanceId}
+                              title={cardName(card.definition)}
+                              energy={game.playerEnergy}
+                              actions={getActionsForCard()}
+                              onSelect={handleAction}
+                              onCancel={cancelSelection}
+                            />
+                          )}
+                        </AnimatePresence>
+                      </>
+                    ) : (
+                      <span className="text-amber-300/25 text-[10px] font-display tracking-wider">{i + 1}</span>
+                    )}
+                  </div>
                 );
               })}
-            </AnimatePresence>
-            {game.playerHand.length === 0 && (
-              <span className="text-amber-200/20 text-xs font-display">{t('game.emptyHand')}</span>
-            )}
-          </div>
+            </div>
+            <div className="justify-self-end">
+              <EnergyPanel
+                name={playerName}
+                energy={game.playerEnergy}
+                max={game.playerMaxEnergy}
+                tone="player"
+                active={isPlayerTurn && isPlaying}
+                nextTurn={isPlaying ? game.playerNextTurnGain : null}
+                nextRound={game.roundNumber < MAX_ROUNDS ? game.playerNextRoundBonus : null}
+              />
+            </div>
+          </section>
         </div>
+      </main>
+
+      {/* ===== STATUS LINE — contextual hint, reserved height so nothing shifts ===== */}
+      <div className="relative shrink-0 h-6 sm:h-7 flex items-center justify-center px-3">
+        <AnimatePresence mode="wait">
+          {statusText && (
+            <motion.span
+              key={statusText}
+              initial={{ opacity: 0, y: 6 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -6 }}
+              transition={{ duration: 0.2 }}
+              className={`max-w-full truncate text-[9px] sm:text-xs font-display tracking-wider ${
+                targetHint
+                  ? 'text-amber-100 bg-amber-900/60 border border-amber-400/50 rounded-full px-3 py-0.5 shadow-[0_0_14px_rgba(251,191,36,0.35)]'
+                  : 'text-amber-200/45 uppercase'
+              }`}
+            >
+              {statusText}
+            </motion.span>
+          )}
+        </AnimatePresence>
+      </div>
+
+      {/* ===== PLAYER HAND — fanned, drag to play ===== */}
+      <div
+        className="relative shrink-0 flex items-end justify-center px-3 pb-3 sm:pb-4"
+        style={{ minHeight: 'calc(var(--card-w) * 1.4 + 1rem)' }}
+      >
+        <div aria-hidden className="absolute inset-x-[10%] bottom-1 sm:bottom-2 h-3/4 rounded-t-[50%] bg-gradient-to-t from-emerald-500/10 to-transparent blur-xl pointer-events-none" />
+        <AnimatePresence>
+          {game.playerHand.map((card, i) => {
+            const isConsumible = card.definition.tipo === 'consumible';
+            const canDrag = isPlayerTurn && isPlaying && (isConsumible || !tableFull);
+            const affordable = canDrag && card.definition.coste <= game.playerEnergy;
+            const isDragging = draggingCardId === card.instanceId;
+            const offset = i - (game.playerHand.length - 1) / 2;
+            return (
+              <motion.div
+                key={card.instanceId}
+                layout
+                initial={{ opacity: 0, y: 60, scale: 0.8 }}
+                animate={{
+                  opacity: isDragging ? 0 : 1,
+                  y: Math.abs(offset) * 5,
+                  rotate: offset * 3.5,
+                  scale: 1,
+                }}
+                exit={{ opacity: 0, y: -40, scale: 0.8 }}
+                transition={{ type: 'spring', stiffness: 300, damping: 25, delay: i * 0.04 }}
+                whileHover={canDrag && !isDragging ? { y: -18, rotate: 0, scale: 1.1, transition: { duration: 0.2 } } : {}}
+                onPointerDown={canDrag ? (e) => handlePointerDownCard(e, card.instanceId) : undefined}
+                onPointerMove={canDrag ? handlePointerMoveCard : undefined}
+                onPointerUp={canDrag ? handlePointerUpCard : undefined}
+                onPointerCancel={canDrag ? handlePointerCancelCard : undefined}
+                onContextMenu={canDrag ? (e) => { e.preventDefault(); inspectAlly(card); } : undefined}
+                className={`relative origin-bottom select-none touch-none hover:z-30 ${
+                  canDrag ? 'cursor-grab active:cursor-grabbing' : 'cursor-default'
+                }`}
+                style={{
+                  marginLeft: i === 0 ? 0 : 'calc(var(--card-w) * 0.1)',
+                  ...(isDragging ? { width: 0, marginLeft: 0, marginRight: 0 } : {}),
+                }}
+              >
+                {affordable && (
+                  <motion.div
+                    aria-hidden
+                    animate={{ opacity: [0.45, 0.85, 0.45] }}
+                    transition={{ duration: 2.2, repeat: Infinity }}
+                    className="absolute -inset-1 rounded-xl bg-emerald-400/30 blur-md pointer-events-none"
+                  />
+                )}
+                <GameCard
+                  card={card}
+                  index={i}
+                  disabled={!canDrag}
+                  selected={false}
+                  inHand
+                  onInspect={canDrag ? undefined : inspectAlly}
+                />
+              </motion.div>
+            );
+          })}
+        </AnimatePresence>
+        {game.playerHand.length === 0 && (
+          <span className="self-center text-amber-200/25 text-xs font-display">{t('game.emptyHand')}</span>
+        )}
       </div>
 
       {/* ===== Floating drag preview — follows cursor ===== */}
@@ -885,6 +858,29 @@ export function GameBoardView({ game, onExit, playerId, playerName: playerNamePr
         </motion.div>
       )}
 
+      {isPlaying && (
+        <TurnBanner
+          bannerKey={turnBannerKey}
+          isPlayerTurn={isPlayerTurn}
+          text={isPlayerTurn ? t('game.turn.yours') : t('game.turn.rival', { name: opponentLabel.toUpperCase() })}
+        />
+      )}
+
+      <SettingsDialog open={showSettings} onOpenChange={setShowSettings} scope="game" />
+
+      <AnimatePresence>
+        {inspect && (
+          <CardInspector
+            key={inspect.card.instanceId}
+            card={
+              [...game.playerHand, ...game.playerTable, ...game.botTable].find((c) => c?.instanceId === inspect.card.instanceId)
+              ?? inspect.card
+            }
+            side={inspect.side}
+            onClose={closeInspect}
+          />
+        )}
+      </AnimatePresence>
 
       {/* ===== Overlays ===== */}
       <AnimatePresence>

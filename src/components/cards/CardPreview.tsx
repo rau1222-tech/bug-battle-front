@@ -1,68 +1,64 @@
-import { DEFAULT_CARD_IMAGE, resolveCardImage, type CardTemplate } from '@/constants';
-import cardBase from '@/assets/Base-Carta.png';
+import type { CSSProperties } from 'react';
+import { Hourglass, Swords, Zap } from 'lucide-react';
+import { SKILLS, type CardInstance, type CardTemplate } from '@/constants';
+import CardFrame from '@/components/game/CardFrame';
 import { useI18n } from '@/i18n';
 
 interface Props {
   card: CardTemplate;
 }
 
+/** Same frame the card gets in a match, plus the text that the frame leaves out. */
 export default function CardPreview({ card }: Props) {
-  const { t, cardName, cardDescription } = useI18n();
-  const isProgramador = card.tipo === 'programador';
+  const { t, cardName, cardDescription, skillName, skillNameById } = useI18n();
+  const instance: CardInstance = {
+    instanceId: 'preview',
+    definition: { ...card, nombre: cardName(card) || t('cards.previewNewCard') },
+    cordura: card.corduraMax ?? 0,
+    efectosActivos: [],
+    disponible: true,
+  };
 
   return (
-    <div className="relative select-none w-[10rem] h-[14rem] sm:w-[12rem] sm:h-[16.8rem] mx-auto">
-      <img
-        src={cardBase}
-        alt=""
-        className="absolute inset-0 w-full h-full object-fill pointer-events-none drop-shadow-[0_8px_16px_rgba(0,0,0,0.5)]"
-        draggable={false}
-      />
-
-      <div className="absolute top-[4%] left-[10%] right-[18%] h-[7%] flex items-center justify-center pointer-events-none overflow-hidden">
-        <span className={`text-[8px] font-display font-bold tracking-wide text-center leading-none px-1 ${
-          card.tipo === 'consumible' ? 'text-cyan-700' : isProgramador ? 'text-stone-900' : 'text-red-600'
-        }`}>
-          {cardName(card).toUpperCase() || t('cards.previewNewCard')}
-        </span>
+    <div className="flex flex-col items-center gap-3">
+      {/* Padding leaves room for the badges and crown that stick out of the frame */}
+      <div className="pt-7 px-4 pb-2">
+        <div className="game-card relative select-none" style={{ '--card-w': 'clamp(9rem, 40vw, 13rem)' } as CSSProperties}>
+          <CardFrame card={instance} />
+        </div>
       </div>
 
-      <div className="absolute top-[13%] left-[8%] right-[8%] bottom-[45%] flex items-center justify-center pointer-events-none">
-        <img
-          src={resolveCardImage(card.image)}
-          alt={cardName(card) || t('cards.previewAlt')}
-          className="w-full h-full object-contain rounded-sm"
-          onError={(event) => {
-            const img = event.currentTarget;
-            if (img.dataset.fallbackApplied === 'true') return;
-            img.dataset.fallbackApplied = 'true';
-            img.src = DEFAULT_CARD_IMAGE;
-          }}
-          draggable={false}
-        />
-      </div>
-
-      <div className="absolute top-[59%] left-[10%] right-[10%] bottom-[14%] flex items-center justify-center p-1 pointer-events-none overflow-hidden">
-        <p className="text-[7px] font-body text-stone-600 text-center leading-tight">
+      <div className="w-full rounded-lg border border-cyan-500/20 bg-black/30 p-3 space-y-2">
+        <p className="text-xs font-body italic text-cyan-100/80 leading-snug">
           {cardDescription(card) || t('cards.descriptionPlaceholder')}
         </p>
-      </div>
-
-      <div className="absolute bottom-[3%] left-[10%] w-[28%] h-[8%] flex items-center justify-center pointer-events-none">
-        {card.tipo === 'consumible' ? (
-          <span className="text-[12px] font-display font-bold">🧪</span>
-        ) : card.tipo === 'programador' ? (
-          <span className="text-[11px] font-display font-bold text-stone-800">{card.potencia ?? 0}</span>
-        ) : (
-          <span className="text-[11px] font-display font-bold text-red-600">QA</span>
+        {card.habilidades.length > 0 && (
+          <ul className="space-y-1">
+            {card.habilidades.map(([skillId, potencia, coste, duracion], i) => (
+              <li key={`${skillId}-${i}`} className="flex items-center gap-2 text-[11px] text-cyan-100">
+                <span className="flex-1 min-w-0 truncate font-display font-bold">
+                  {SKILLS[skillId] ? skillName(SKILLS[skillId]) : skillNameById(skillId)}
+                </span>
+                {potencia > 0 && (
+                  <span className="inline-flex items-center gap-0.5 text-red-300">
+                    <Swords className="w-3 h-3" />
+                    {potencia}
+                  </span>
+                )}
+                <span className="inline-flex items-center gap-0.5 text-amber-300">
+                  <Zap className="w-3 h-3 fill-current" />
+                  {coste}
+                </span>
+                {duracion > 0 && (
+                  <span className="inline-flex items-center gap-0.5 text-sky-300">
+                    <Hourglass className="w-3 h-3" />
+                    {duracion}
+                  </span>
+                )}
+              </li>
+            ))}
+          </ul>
         )}
-      </div>
-
-      <div className="absolute bottom-[2%] right-[8%] w-[30%] h-[10%] flex items-center justify-center pointer-events-none">
-        <div className="flex items-center justify-center gap-[1px] bg-gradient-to-b from-amber-700/80 to-amber-900/90 rounded-[3px] px-1.5 py-0.5 border border-amber-400/50">
-          <span className="text-[9px] leading-none">⚡</span>
-          <span className="text-[11px] font-display font-black text-amber-100 leading-none tabular-nums">{card.coste}</span>
-        </div>
       </div>
     </div>
   );

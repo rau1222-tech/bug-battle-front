@@ -10,9 +10,11 @@ import { dialogContentClass, sectionTitleClass } from './dialogStyles';
 interface SettingsDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  /** 'game' hides the appearance section (the board has its own look). */
+  scope?: 'all' | 'game';
 }
 
-export default function SettingsDialog({ open, onOpenChange }: SettingsDialogProps) {
+export default function SettingsDialog({ open, onOpenChange, scope = 'all' }: SettingsDialogProps) {
   const { t } = useI18n();
   const settings = useSettings();
 
@@ -27,41 +29,45 @@ export default function SettingsDialog({ open, onOpenChange }: SettingsDialogPro
         </DialogHeader>
 
         <div className="flex flex-col gap-5">
-          <section className="flex flex-col gap-3">
-            <h3 className={sectionTitleClass}>{t('settings.appearance')}</h3>
-            <div className="flex flex-col gap-2">
-              <span className="text-xs font-body text-cyan-100/80">{t('settings.theme')}</span>
-              <div role="radiogroup" aria-label={t('settings.theme')} className="grid grid-cols-5 gap-2">
-                {THEMES.map((theme) => {
-                  const active = settings.theme === theme.id;
-                  return (
-                    <button
-                      key={theme.id}
-                      type="button"
-                      role="radio"
-                      aria-checked={active}
-                      onClick={() => updateSettings({ theme: theme.id })}
-                      className={cn(
-                        'flex flex-col items-center gap-1.5 rounded-md border py-2 transition-all',
-                        active ? 'border-cyan-400/60 bg-cyan-500/10' : 'border-white/5 hover:border-white/15 hover:bg-white/5',
-                      )}
-                    >
-                      <span
-                        className={cn('h-6 w-6 rounded-full transition-transform', active && 'scale-110')}
-                        style={{ background: theme.swatch, boxShadow: active ? `0 0 12px ${theme.swatch}` : undefined }}
-                      />
-                      <span className="text-[9px] font-display tracking-wider text-cyan-100/70">{t(`settings.theme.${theme.id}`)}</span>
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-            <Row label={t('common.language')}>
-              <LanguageSwitcher />
-            </Row>
-          </section>
+          {scope === 'all' && (
+            <>
+              <section className="flex flex-col gap-3">
+                <h3 className={sectionTitleClass}>{t('settings.appearance')}</h3>
+                <div className="flex flex-col gap-2">
+                  <span className="text-xs font-body text-cyan-100/80">{t('settings.theme')}</span>
+                  <div role="radiogroup" aria-label={t('settings.theme')} className="grid grid-cols-5 gap-2">
+                    {THEMES.map((theme) => {
+                      const active = settings.theme === theme.id;
+                      return (
+                        <button
+                          key={theme.id}
+                          type="button"
+                          role="radio"
+                          aria-checked={active}
+                          onClick={() => updateSettings({ theme: theme.id })}
+                          className={cn(
+                            'flex flex-col items-center gap-1.5 rounded-md border py-2 transition-all',
+                            active ? 'border-cyan-400/60 bg-cyan-500/10' : 'border-white/5 hover:border-white/15 hover:bg-white/5',
+                          )}
+                        >
+                          <span
+                            className={cn('h-6 w-6 rounded-full transition-transform', active && 'scale-110')}
+                            style={{ background: theme.swatch, boxShadow: active ? `0 0 12px ${theme.swatch}` : undefined }}
+                          />
+                          <span className="text-[9px] font-display tracking-wider text-cyan-100/70">{t(`settings.theme.${theme.id}`)}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+                <Row label={t('common.language')}>
+                  <LanguageSwitcher />
+                </Row>
+              </section>
 
-          <Divider />
+              <Divider />
+            </>
+          )}
 
           <section className="flex flex-col gap-3">
             <h3 className={sectionTitleClass}>{t('settings.sound')}</h3>
