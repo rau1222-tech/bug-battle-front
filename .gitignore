@@ -25,6 +25,10 @@ dist-ssr
 .env
 package-lock.json
 
+# Local AI runtime and model: prepared on request (npm run ai:setup / "Prepare local AI") or shipped inside the game ZIP (too large for git)
+local-ai/runtime/
+local-ai/models/
+
 # Local Supabase database dump (npm run db:dump)
 supabase/dump/
 scripts/dump-supabase.mjs

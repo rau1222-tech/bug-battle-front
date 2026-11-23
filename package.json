@@ -12,7 +12,9 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "db:dump": "node scripts/dump-supabase.mjs",
-    "sim": "vite-node scripts/balance-sim.ts"
+    "sim": "vite-node scripts/balance-sim.ts",
+    "ai": "vite-node local-ai/main.ts",
+    "ai:setup": "vite-node local-ai/setup.ts"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.10.0",

@@ -66,6 +66,17 @@ export const RARITY_GLOW: Record<Rarity, string> = {
   legendario: 'shadow-yellow-400/50',
 };
 
+/** Reads the player's owned cards from Supabase (RLS limits it to the signed-in player). */
+export async function fetchCollection(userId: string): Promise<Collection> {
+  const { data, error } = await supabase.from('player_collection').select('card_id, quantity').eq('player_id', userId);
+  if (error) throw new Error(error.message);
+  const collection: Collection = {};
+  for (const row of data ?? []) {
+    if (row.quantity > 0) collection[row.card_id] = row.quantity;
+  }
+  return collection;
+}
+
 /* ── Hook ── */
 export function useCollection(userId: string | null | undefined) {
   const [collection, setCollection] = useState<Collection>({});
@@ -89,18 +100,12 @@ export function useCollection(userId: string | null | undefined) {
     setError(null);
     (async () => {
       try {
-        const [{ data: playerData, error: playerErr }, { data: collectionData, error: collectionErr }] = await Promise.all([
+        const [{ data: playerData, error: playerErr }, nextCollection] = await Promise.all([
           supabase.from('players').select('gold').eq('id', userId).single(),
-          supabase.from('player_collection').select('card_id, quantity').eq('player_id', userId),
+          fetchCollection(userId),
         ]);
 
         if (playerErr) throw new Error(playerErr.message);
-        if (collectionErr) throw new Error(collectionErr.message);
-
-        const nextCollection: Collection = {};
-        for (const row of collectionData ?? []) {
-          if (row.quantity > 0) nextCollection[row.card_id] = row.quantity;
-        }
 
         if (!cancelled) {
           setCollection(nextCollection);

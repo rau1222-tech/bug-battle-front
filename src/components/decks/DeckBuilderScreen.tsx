@@ -1,14 +1,19 @@
 import { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Save, Loader2, Plus, Minus, Search, AlertTriangle, RefreshCw } from 'lucide-react';
+import { Save, Loader2, Plus, Minus, Search, AlertTriangle, RefreshCw, Sparkles, Undo2 } from 'lucide-react';
 import BackButton from '@/components/ui/BackButton';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { DECK_SIZE, MAX_COPIES, type CardTemplate, type CardType } from '@/constants';
 import { saveDeckRecord, type DeckCardEntry, type DeckSummary } from '@/hooks/useDecks';
 import { useCollection, getRarity, type Rarity } from '@/hooks/useCollection';
 import { useCards } from '@/hooks/useCards';
+import { useDeckGenerator } from '@/hooks/useDeckGenerator';
+import { useLocalAiStatus } from '@/hooks/useLocalAiStatus';
+import type { Strategy } from '@/game/deckGenerator/contract';
+import { toCounts } from '@/game/deckGenerator/deckRules';
 import { ROUTES } from '@/routes';
 import DeckCardThumb from './DeckCardThumb';
+import AiDeckDialog from './AiDeckDialog';
 import { toast } from 'sonner';
 import { useI18n } from '@/i18n';
 
@@ -38,8 +43,8 @@ function sameCounts(a: Record<string, number>, b: Record<string, number>) {
 }
 
 export default function DeckBuilderScreen({ userId, editing, onBack, onSaved }: Props) {
-  const { t, cardName } = useI18n();
-  const { cards } = useCards();
+  const { t, cardName, language } = useI18n();
+  const { cards, loading: cardsLoading } = useCards();
   const {
     collection,
     loading: collectionLoading,
@@ -56,6 +61,15 @@ export default function DeckBuilderScreen({ userId, editing, onBack, onSaved }: 
   const [tab, setTab] = useState<'catalog' | 'deck'>('catalog');
   const [saving, setSaving] = useState(false);
   const [counts, setCounts] = useState<Record<string, number>>(() => countsFrom(editing));
+  const ai = useDeckGenerator({ userId, cards, language });
+  const [aiOpen, setAiOpen] = useState(false);
+  const aiStatus = useLocalAiStatus(aiOpen);
+  const [aiStrategy, setAiStrategy] = useState<Strategy>('balanced');
+  const [aiGenerated, setAiGenerated] = useState(false);
+  /** Selection before the last generation, restored exactly by "undo". */
+  const [undoCounts, setUndoCounts] = useState<Record<string, number> | null>(null);
+  // V1: AI generation only when creating a deck
+  const aiAvailable = !editing;
 
   const collectionReady = !collectionLoading && !collectionError;
   const ownedOf = (id: string) => collection[id] ?? 0;
@@ -173,6 +187,55 @@ export default function DeckBuilderScreen({ userId, editing, onBack, onSaved }: 
     onBack();
   };
 
+  const openAi = () => {
+    ai.select();
+    setAiOpen(true);
+  };
+
+  const closeAi = () => {
+    ai.reset();
+    setAiOpen(false);
+  };
+
+  const undoAi = () => {
+    if (!undoCounts) return;
+    setCounts(undoCounts);
+    setUndoCounts(null);
+    toast.info(t('decks.builder.ai.undone'), { id: 'ai-deck' });
+  };
+
+  const handleAiConfirm = async (strategy: Strategy, useModel: boolean) => {
+    setAiStrategy(strategy);
+    // The modal dialog blocks manual edits while generating, so this is the selection to restore
+    const before = counts;
+    const outcome = await ai.generate(strategy, { useModel });
+    if (!outcome) return;
+    setCounts(toCounts(outcome.cards));
+    setUndoCounts(before);
+    setAiGenerated(true);
+    setAiOpen(false);
+    setTab('deck');
+    const message =
+      outcome.source === 'ai'
+        ? t('decks.builder.ai.result.ai')
+        : outcome.source === 'ai_repaired'
+          ? t('decks.builder.ai.result.aiRepaired')
+          : t('decks.builder.ai.result.fallback');
+    const show = outcome.source === 'fallback' ? toast.info : toast.success;
+    show(message, {
+      id: 'ai-deck',
+      // Deterministic, translated summary: the model's free-text explanation is never shown
+      description: t(`decks.builder.ai.summary.${strategy}`),
+      action: {
+        label: t('decks.builder.ai.undo'),
+        onClick: () => {
+          setCounts(before);
+          setUndoCounts(null);
+        },
+      },
+    });
+  };
+
   const handleSave = async () => {
     if (!isValid) {
       toast.error(blocker);
@@ -207,6 +270,30 @@ export default function DeckBuilderScreen({ userId, editing, onBack, onSaved }: 
           <h1 className="font-display text-sm sm:text-lg text-emerald-100 tracking-wider truncate text-glow-green">
             {editing ? t('decks.builder.titleEdit') : t('decks.builder.titleNew')}
           </h1>
+          <div className="flex items-center gap-1.5 shrink-0">
+          {aiAvailable && undoCounts && (
+            <button
+              type="button"
+              onClick={undoAi}
+              aria-label={t('decks.builder.ai.undoGeneration')}
+              title={t('decks.builder.ai.undoGeneration')}
+              className="flex items-center justify-center w-9 h-9 rounded-md border border-emerald-500/20 text-emerald-200/70 hover:text-emerald-100 hover:border-emerald-400/40 transition-colors"
+            >
+              <Undo2 className="w-3.5 h-3.5" />
+            </button>
+          )}
+          {aiAvailable && (
+            <button
+              type="button"
+              onClick={openAi}
+              disabled={!collectionReady || cardsLoading || ai.busy}
+              aria-label={aiGenerated ? t('decks.builder.ai.regenerate') : t('decks.builder.ai.button')}
+              className="flex items-center gap-1.5 px-3 h-9 rounded-md border border-emerald-400/30 bg-[hsl(220,15%,12%)] hover:bg-emerald-900/40 text-emerald-100 font-display text-[11px] tracking-wider disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+            >
+              <Sparkles className="w-3.5 h-3.5" aria-hidden="true" />
+              <span className="hidden sm:inline">{aiGenerated ? t('decks.builder.ai.regenerate') : t('decks.builder.ai.button')}</span>
+            </button>
+          )}
           <button
             onClick={handleSave}
             disabled={!isValid || saving}
@@ -216,6 +303,7 @@ export default function DeckBuilderScreen({ userId, editing, onBack, onSaved }: 
             {saving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}
             {t('decks.builder.save')}
           </button>
+          </div>
         </div>
 
         {/* Name + emoji + counter — terminal-style panel */}
@@ -522,6 +610,18 @@ export default function DeckBuilderScreen({ userId, editing, onBack, onSaved }: 
           </div>
         </div>
       </div>
+      {aiAvailable && (
+        <AiDeckDialog
+          open={aiOpen}
+          status={ai.status}
+          error={ai.error}
+          replaceCount={total}
+          initialStrategy={aiStrategy}
+          ai={aiStatus}
+          onGenerate={handleAiConfirm}
+          onClose={closeAi}
+        />
+      )}
     </div>
   );
 }

@@ -347,3 +347,6 @@ html[data-reduce-motion='true'] .board-packet,
 html[data-reduce-motion='true'] .board-scan {
   display: none;
 }
+html[data-reduce-motion='true'] .ai-thinking-dot {
+  animation: none;
+}
