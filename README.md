@@ -369,6 +369,18 @@ El reclutamiento se hace mediante **banners**: conjuntos de cartas disponibles d
 - **Fases**: Selección de banner → Animación de apertura → Revelación con flip de cartas.
 - La colección y las monedas se guardan en Supabase (`player_collection`, `players.gold`).
 
+### Asistente de banners (IA local)
+
+En `/gacha`, el botón **Preguntar a la IA** abre un chat (panel lateral en escritorio, panel inferior a pantalla completa en móvil) disponible para **todos los usuarios**. Responde solo sobre banners, cómo conseguir cartas, la colección, costes, oro, sobres asequibles, rareza y probabilidad **por extracción**.
+
+- **Misma IA que los mazos**: mismo servicio local, mismo Ollama privado y mismo `qwen2.5:1.5b`, con su propio endpoint `POST /api/banners/chat`. La preparación (descarga, progreso, cancelar, reintentar) es el panel compartido; si se prepara en `/decks/new` queda lista también aquí y viceversa. No hay IA externa ni fallback a Internet.
+- **Datos**: el navegador envía solo lo que el jugador ya ve: banners **activos** (`isBannerActive()`, igual para administradores), cartas de esos banners y la colección/oro del jugador. Sin sesión, token, `user_id` ni descripciones. Probabilidades, sobres asequibles, rankings por estrategia (heurísticos) y cartas que faltan se calculan en el frontend (`src/game/bannerChat/facts.ts`).
+- **Ámbito**: filtro determinista en navegador y servicio (código, SQL, tecnología, inyección de prompt, modificar el juego, peticiones creativas, preguntas sin relación) → una llamada estructurada con categoría cerrada → `allowed` calculado por código → validación de la respuesta. Las preguntas fuera de ámbito muestran siempre el mismo mensaje traducido.
+- **Validación de la respuesta** (`src/game/bannerChat/scope.ts`): se descartan frases con porcentajes que no corresponden a la carta/banner, cartas situadas en banners que no las contienen, cifras que no están en los datos, cálculos acumulados, garantías, nombres de campos internos o recomendaciones que contradicen el ranking/estrategia. Las fichas de banners y cartas (con coste, sobres asequibles y probabilidad por extracción reales) y las limitaciones se calculan por código. Si no queda texto fiable, solo se muestran las fichas.
+- **Probabilidades**: solo por extracción. No se calculan probabilidades por sobre ni acumuladas ni sobres necesarios, porque la lógica de `open_banner_pack` no está en el repositorio; el asistente indica que no dispone de información sobre garantías o pity.
+- **Historial**: solo en memoria, máximo 6 entradas (≈3 intercambios), sin preguntas rechazadas ni texto del asistente; se borra con **Limpiar**, al salir o al recargar.
+- **Variables**: `OLLAMA_CHAT_TIMEOUT_MS` (30000) y `OLLAMA_CHAT_TEMPERATURE` (0.2).
+
 ---
 
 ## Base de Datos
@@ -465,6 +477,8 @@ Las variables de la IA local son opcionales; sus valores por defecto funcionan s
 | `OLLAMA_MODEL` | `qwen2.5:1.5b` | Modelo (configurable) |
 | `OLLAMA_TEMPERATURE` | `0.3` | Variación entre generaciones (0–1) |
 | `OLLAMA_TIMEOUT_MS` | `30000` | Timeout de la llamada al modelo |
+| `OLLAMA_CHAT_TIMEOUT_MS` | `30000` | Timeout del asistente de banners |
+| `OLLAMA_CHAT_TEMPERATURE` | `0.2` | Temperatura del asistente de banners |
 | `LOCAL_AI_MANAGE_OLLAMA` | `true` | `false` para usar un Ollama propio |
 | `LOCAL_AI_DEBUG` | `true` con `npm run dev` | Registra duraciones por generación (sin prompts ni datos del jugador) |
 

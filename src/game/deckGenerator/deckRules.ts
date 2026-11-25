@@ -163,6 +163,28 @@ function scoringContext(request: DeckGenerateRequest, seed: number): ScoringCont
   return { request, profile, byId, features, score, cap, order };
 }
 
+/**
+ * Per-card usefulness for each strategy (same weights and normalisation as the deck generator, without seed noise).
+ * Higher is better; a heuristic, not a guarantee.
+ */
+export function cardStrategyScores(cards: CardDto[]): Record<string, Record<Strategy, number>> {
+  const out: Record<string, Record<Strategy, number>> = {};
+  if (cards.length === 0) return out;
+  const strategies = Object.keys(STRATEGY_PROFILES) as Strategy[];
+  const base: Omit<DeckGenerateRequest, 'strategy'> = { deckSize: 1, maxCopies: 1, seed: 0, cards };
+  for (const strategy of strategies) {
+    const ctx = scoringContext({ ...base, strategy }, 0);
+    const jitterFree = (id: string) => {
+      const f = ctx.features.get(id)!;
+      const w = ctx.profile.weights;
+      return w.attack * f.attack + w.burst * f.burst + w.buff * f.buff + w.control * f.control +
+        w.heal * f.heal + w.sanity * f.sanity + w.cheap * f.cheap - w.cost * f.cost;
+    };
+    for (const c of cards) (out[c.id] ??= {} as Record<Strategy, number>)[strategy] = jitterFree(c.id);
+  }
+  return out;
+}
+
 /** Probability that an opening hand of `hand` cards has no card costing ≤2 (hypergeometric). */
 function deadHandProbability(total: number, early: number, hand = 4): number {
   if (total < hand) return 0;

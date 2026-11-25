@@ -4,6 +4,8 @@
  */
 import http from 'node:http';
 import { DeckGenerateRequestSchema, LIMITS, type AiErrorCode, type AiSetupStatus, type LocalAiHealth } from '../src/game/deckGenerator/contract';
+import { BannerChatRequestSchema } from '../src/game/bannerChat/contract';
+import { bannerChatWithModel } from './bannerChat';
 import type { LocalAiConfig } from './config';
 import { generateDeckWithModel } from './decks';
 import { OllamaError, type OllamaClient } from './ollama';
@@ -38,6 +40,14 @@ const STATUS_BY_CODE: Partial<Record<AiErrorCode, number>> = {
 };
 
 type Handler = (req: http.IncomingMessage, signal: AbortSignal) => Promise<unknown>;
+
+/** Every AI operation shares one runtime and model: answer 503 right away until it is ready. */
+function requireReady(runtime: RuntimeControl) {
+  const state = runtime.state;
+  if (state === 'ready') return;
+  const modelMissing = state === 'model_missing' || state === 'model_downloading' || state === 'model_loading';
+  throw new HttpError(503, modelMissing ? 'MODEL_NOT_INSTALLED' : 'OLLAMA_UNAVAILABLE', 'The local AI is not ready');
+}
 
 function readJsonBody(req: http.IncomingMessage, limit: number): Promise<unknown> {
   return new Promise((resolve, reject) => {
@@ -95,11 +105,7 @@ export function createLocalAiServer({ config, ollama, runtime, log = console }: 
       const body = await readJsonBody(req, LIMITS.maxBodyBytes);
       const parsed = DeckGenerateRequestSchema.safeParse(body);
       if (!parsed.success) throw new HttpError(400, 'INVALID_INPUT', 'Invalid deck generation request');
-      const state = runtime.state;
-      if (state !== 'ready') {
-        const modelMissing = state === 'model_missing' || state === 'model_downloading' || state === 'model_loading';
-        throw new HttpError(503, modelMissing ? 'MODEL_NOT_INSTALLED' : 'OLLAMA_UNAVAILABLE', 'The local AI is not ready');
-      }
+      requireReady(runtime);
       const result = await generateDeckWithModel(parsed.data, ollama, {
         temperature: config.temperature,
         timeoutMs: config.ollamaTimeoutMs,
@@ -109,6 +115,32 @@ export function createLocalAiServer({ config, ollama, runtime, log = console }: 
         log.info(`[local-ai] decks.generate ${parsed.data.strategy} model=${result.meta.model} seed=${result.meta.seed} ${result.meta.durationMs} ms`);
       }
       return result;
+    },
+
+    'POST /api/banners/chat': async (req, signal) => {
+      const body = await readJsonBody(req, LIMITS.maxBodyBytes);
+      const parsed = BannerChatRequestSchema.safeParse(body);
+      if (!parsed.success) throw new HttpError(400, 'INVALID_INPUT', 'Invalid banner chat request');
+      requireReady(runtime);
+      const started = Date.now();
+      // Development-only metrics: never the question, history, collection, prompt or answer
+      const debug = (outcome: string) => {
+        if (config.debug) {
+          log.info(`[local-ai] banners.chat ${outcome} model=${ollama.model} seed=${parsed.data.seed} banners=${parsed.data.banners.length} cards=${parsed.data.cards.length} ${Date.now() - started} ms`);
+        }
+      };
+      try {
+        const result = await bannerChatWithModel(parsed.data, ollama, {
+          temperature: config.chatTemperature,
+          timeoutMs: config.chatTimeoutMs,
+          signal,
+        });
+        debug(`category=${result.result.category} allowed=${result.result.allowed}`);
+        return result;
+      } catch (err) {
+        debug(`error=${err instanceof OllamaError ? err.code : 'INTERNAL'}`);
+        throw err;
+      }
     },
   };
 

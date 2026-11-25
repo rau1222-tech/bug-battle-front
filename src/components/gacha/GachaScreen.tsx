@@ -1,10 +1,13 @@
 import { useEffect, useMemo, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { Sparkles } from 'lucide-react';
 import { toast } from 'sonner';
 import BackButton from '@/components/ui/BackButton';
 import TerminalPanel from '@/components/layout/TerminalPanel';
 import { useI18n } from '@/i18n';
 import BannerEditorModal from '@/components/gacha/BannerEditorModal';
+import BannerChatSheet from '@/components/gacha/BannerChatSheet';
+import { useLocalAiStatus } from '@/hooks/useLocalAiStatus';
 import { DEFAULT_CARD_IMAGE, resolveCardImage, type CardTemplate } from '@/constants';
 import { useAuthContext } from '@/contexts/AuthContext';
 import { useBanners } from '@/hooks/useBanners';
@@ -62,6 +65,8 @@ export default function GachaScreen({ onBack }: Props) {
   const [selectedBannerId, setSelectedBannerId] = useState<string | null>(null);
   const [editor, setEditor] = useState<{ open: boolean; banner: Banner | null }>({ open: false, banner: null });
   const [now, setNow] = useState(() => new Date());
+  const [chatOpen, setChatOpen] = useState(false);
+  const aiStatus = useLocalAiStatus(chatOpen && phase === 'shop');
 
   // Re-evaluates banner availability so a banner that starts/ends while the screen is open updates its state.
   useEffect(() => {
@@ -146,9 +151,22 @@ export default function GachaScreen({ onBack }: Props) {
           <h1 className="font-display text-lg sm:text-2xl text-purple-100 tracking-wider text-glow-purple">
             {t('gacha.title')}
           </h1>
-          <div className="flex items-center gap-2 bg-[hsl(220,18%,10%)] px-3 py-1.5 rounded-md border border-purple-500/20">
-            <span className="text-base">🪙</span>
-            <span className="font-display text-sm text-purple-100 tracking-wider">{coins}</span>
+          <div className="flex items-center gap-2">
+            {phase === 'shop' && (
+              <button
+                type="button"
+                onClick={() => setChatOpen(true)}
+                aria-label={t('gacha.chat.open')}
+                className="flex items-center gap-1.5 h-9 px-3 rounded-md bg-[hsl(220,18%,10%)] border border-purple-500/30 text-purple-100 hover:bg-purple-600/20 hover:border-purple-400/50 font-display text-[11px] tracking-wider transition-colors"
+              >
+                <Sparkles className="w-3.5 h-3.5 text-purple-300" aria-hidden="true" />
+                <span className="hidden sm:inline">{t('gacha.chat.open')}</span>
+              </button>
+            )}
+            <div className="flex items-center gap-2 bg-[hsl(220,18%,10%)] px-3 py-1.5 rounded-md border border-purple-500/20">
+              <span className="text-base">🪙</span>
+              <span className="font-display text-sm text-purple-100 tracking-wider">{coins}</span>
+            </div>
           </div>
         </div>
 
@@ -513,6 +531,18 @@ export default function GachaScreen({ onBack }: Props) {
           onSave={handleSaveBanner}
         />
       )}
+
+      {/* Same chat for every role: it only ever receives the active banners (see buildBannerChatRequest) */}
+      <BannerChatSheet
+        open={chatOpen && phase === 'shop'}
+        onOpenChange={setChatOpen}
+        ai={aiStatus}
+        banners={banners}
+        cards={cards}
+        collection={collection}
+        gold={coins}
+        onSelectBanner={setSelectedBannerId}
+      />
     </div>
   );
 }

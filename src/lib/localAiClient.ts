@@ -12,6 +12,7 @@ import {
   type DeckGenerateResponse,
   type LocalAiHealth,
 } from '@/game/deckGenerator/contract';
+import { BannerChatResponseSchema, type BannerChatRequest, type BannerChatResponse } from '@/game/bannerChat/contract';
 
 export const LOCAL_AI_URL = (import.meta.env.VITE_LOCAL_AI_SERVICE_URL as string | undefined) || 'http://127.0.0.1:8787';
 export const LOCAL_AI_TIMEOUT_MS = Number(import.meta.env.VITE_LOCAL_AI_TIMEOUT_MS) || 35000;
@@ -82,6 +83,10 @@ export async function callLocalAi<T>(path: string, body: unknown, schema: z.ZodT
 
 export function requestDeckGeneration(request: DeckGenerateRequest, options?: CallOptions): Promise<DeckGenerateResponse> {
   return callLocalAi('/api/decks/generate', request, DeckGenerateResponseSchema, options);
+}
+
+export function requestBannerChat(request: BannerChatRequest, options?: CallOptions): Promise<BannerChatResponse> {
+  return callLocalAi('/api/banners/chat', request, BannerChatResponseSchema, options);
 }
 
 const STATUS_TIMEOUT_MS = 5000;

@@ -9,6 +9,9 @@ export interface LocalAiConfig {
   ollamaModel: string;
   temperature: number;
   ollamaTimeoutMs: number;
+  /** Banner chat: own timeout and a lower temperature (factual answers). */
+  chatTemperature: number;
+  chatTimeoutMs: number;
   /** Start and manage a private Ollama instance whose models live in local-ai/models. */
   manageOllama: boolean;
   /** Per-request timing logs (development only; never prompts, answers or user data). */
@@ -45,6 +48,8 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): LocalAiConfig 
     ollamaModel: env.OLLAMA_MODEL || 'qwen2.5:1.5b',
     temperature: num(env.OLLAMA_TEMPERATURE, 0.3, 0, 1),
     ollamaTimeoutMs: num(env.OLLAMA_TIMEOUT_MS, 30000, 1000, 300000),
+    chatTemperature: num(env.OLLAMA_CHAT_TEMPERATURE, 0.2, 0, 1),
+    chatTimeoutMs: num(env.OLLAMA_CHAT_TIMEOUT_MS, 30000, 1000, 300000),
     manageOllama: env.LOCAL_AI_MANAGE_OLLAMA !== 'false',
     debug: env.LOCAL_AI_DEBUG === 'true',
     rootDir,
