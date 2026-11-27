@@ -32,7 +32,12 @@ type DialogId = 'profile' | 'password' | 'settings' | 'signOut' | 'delete' | nul
 const itemClass =
   'gap-3 px-3 py-2 rounded-md text-xs font-display tracking-wide text-cyan-100/75 cursor-pointer focus:bg-cyan-500/10 focus:text-cyan-50 [&>svg]:h-4 [&>svg]:w-4 [&>svg]:text-cyan-300/70';
 
-export default function ProfileMenu() {
+interface ProfileMenuProps {
+  /** Enables the "replay intro" option in Settings. */
+  onReplayIntro?: () => void;
+}
+
+export default function ProfileMenu({ onReplayIntro }: ProfileMenuProps = {}) {
   const { t, locale } = useI18n();
   const { user, profile, signOut, updateProfile } = useAuthContext();
   const { soundEnabled } = useSettings();
@@ -57,6 +62,7 @@ export default function ProfileMenu() {
       {/* modal={false} so dialogs opened from items don't inherit the menu's pointer lock */}
       <DropdownMenu open={open} onOpenChange={setOpen} modal={false}>
         <DropdownMenuTrigger
+          data-tour="profile"
           aria-label={t('auth.openMenu')}
           className="flex items-center gap-2 pl-1 pr-2.5 py-1 rounded-full bg-[hsl(220,20%,8%)]/80 border border-cyan-500/20 backdrop-blur-md shadow-lg shadow-black/40 transition-all hover:border-cyan-400/40 hover:shadow-[0_0_20px_-6px_rgb(var(--theme-400)/0.5)] data-[state=open]:border-cyan-400/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400/50 group"
         >
@@ -134,7 +140,16 @@ export default function ProfileMenu() {
         onDeleteAccount={openDialog('delete')}
       />
       {email && <ChangePasswordDialog {...dialogProps('password')} email={email} hasPassword={hasPassword} />}
-      <SettingsDialog {...dialogProps('settings')} />
+      <SettingsDialog
+        {...dialogProps('settings')}
+        onReplayIntro={
+          onReplayIntro &&
+          (() => {
+            setDialog(null);
+            onReplayIntro();
+          })
+        }
+      />
       <DeleteAccountDialog {...dialogProps('delete')} userId={user.id} displayName={profile.display_name} />
 
       <AlertDialog {...dialogProps('signOut')}>

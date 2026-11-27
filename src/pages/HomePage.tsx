@@ -1,15 +1,20 @@
-import { useEffect, useState, type ReactNode } from 'react';
+import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { motion } from 'framer-motion';
 import ProfileMenu from '@/components/auth/ProfileMenu';
 import BrandHero from '@/components/layout/BrandHero';
 import TerminalPanel from '@/components/layout/TerminalPanel';
+import HomeTour, { type TourStep } from '@/components/tour/HomeTour';
 import { deckDisplayName, getActiveDeckId, useDecks } from '@/hooks/useDecks';
 import { useCollection } from '@/hooks/useCollection';
 import { useAuthContext } from '@/contexts/AuthContext';
+import { hasSeenIntro, markIntroSeen } from '@/lib/intro';
 import { ROUTES } from '@/routes';
 import { useNavigate } from 'react-router-dom';
 import { useI18n } from '@/i18n';
 import { cn } from '@/lib/utils';
+
+/** Lets the home's entrance animation settle before the tour measures the menu. */
+const TOUR_START_DELAY_MS = 900;
 
 export default function HomePage() {
   const navigate = useNavigate();
@@ -18,6 +23,41 @@ export default function HomePage() {
   const { decks } = useDecks(user.id);
   const { coins, loading: coinsLoading } = useCollection(user.id);
   const [activeId, setActiveId] = useState<string | null>(null);
+  const [tourOpen, setTourOpen] = useState(false);
+  const introSeen = hasSeenIntro(user);
+
+  useEffect(() => {
+    if (introSeen) return;
+    const id = window.setTimeout(() => setTourOpen(true), TOUR_START_DELAY_MS);
+    return () => window.clearTimeout(id);
+  }, [introSeen]);
+
+  const closeTour = () => {
+    setTourOpen(false);
+    void markIntroSeen(user);
+  };
+
+  const tourSteps = useMemo<TourStep[]>(() => {
+    const step = (id: string, mood: string, target?: string, params?: Record<string, string>): TourStep => ({
+      id,
+      target,
+      mood,
+      title: t(`tour.${id}.title`, params),
+      text: t(`tour.${id}.text`),
+    });
+    return [
+      step('welcome', '👋', undefined, { name: profile.display_name }),
+      step('player', '🪙', 'player'),
+      step('activeDeck', '🃏', 'activeDeck'),
+      step('play', '▶️', 'play'),
+      step('online', '🌐', 'online'),
+      step('recruit', '📦', 'recruit'),
+      step('decks', '🛠️', 'decks'),
+      ...(profile.admin ? [step('createCard', '🧪', 'createCard')] : []),
+      step('profile', '⚙️', 'profile'),
+      step('end', '🚀'),
+    ];
+  }, [t, profile.display_name, profile.admin]);
 
   useEffect(() => {
     let cancelled = false;
@@ -62,7 +102,7 @@ export default function HomePage() {
         <div className="flex flex-col gap-6 lg:gap-8">
           <BrandHero tagline={t('home.tagline')} />
 
-          <div className="rounded-lg border border-cyan-500/15 bg-[hsl(220,20%,8%)]/80 backdrop-blur-md p-4 flex flex-col gap-4">
+          <div data-tour="player" className="rounded-lg border border-cyan-500/15 bg-[hsl(220,20%,8%)]/80 backdrop-blur-md p-4 flex flex-col gap-4">
             <div className="flex items-center gap-3">
               {profile.avatar_url ? (
                 <img
@@ -87,7 +127,7 @@ export default function HomePage() {
               <Stat label={t('home.decksCount')} value={decks.length} icon="🃏" />
             </div>
 
-            <div className="flex items-center gap-3 rounded-md border border-emerald-500/20 bg-emerald-950/20 px-3 py-2">
+            <div data-tour="activeDeck" className="flex items-center gap-3 rounded-md border border-emerald-500/20 bg-emerald-950/20 px-3 py-2">
               <span className="text-2xl shrink-0">{activeDeck?.cover_emoji ?? '❔'}</span>
               <div className="min-w-0 flex-1">
                 <p className="text-[9px] font-body uppercase tracking-widest text-emerald-300/50">{t('home.activeDeck')}</p>
@@ -109,6 +149,7 @@ export default function HomePage() {
         <TerminalPanel path="~/bug-hunters/main-menu" footer={t('home.tip')} bodyClassName="p-4 sm:p-5">
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
             <MenuTile
+              tourId="play"
               onClick={handleDebugLocal}
               icon="▶"
               title={t('home.playVsAi')}
@@ -117,6 +158,7 @@ export default function HomePage() {
               large
             />
             <MenuTile
+              tourId="online"
               onClick={() => navigate(ROUTES.ONLINE)}
               icon="🌐"
               title="ONLINE PvP"
@@ -124,6 +166,7 @@ export default function HomePage() {
               className="col-span-2 min-h-[110px] bg-gradient-to-br from-emerald-700/60 to-teal-800/60 hover:from-emerald-600/70 hover:to-teal-700/70 border-emerald-400/30 text-emerald-50"
             />
             <MenuTile
+              tourId="recruit"
               onClick={() => navigate(ROUTES.GACHA)}
               icon="📦"
               title={t('home.recruit')}
@@ -131,6 +174,7 @@ export default function HomePage() {
               className="min-h-[110px] bg-gradient-to-b from-purple-600/30 to-purple-900/30 hover:from-purple-500/40 hover:to-purple-800/40 border-purple-500/25 hover:border-purple-400/40 text-purple-100 shadow-[0_0_15px_-5px_hsl(260,80%,60%,0.2)] hover:shadow-[0_0_20px_-5px_hsl(260,80%,60%,0.4)]"
             />
             <MenuTile
+              tourId="decks"
               onClick={() => navigate(ROUTES.DECKS)}
               icon="🃏"
               title={t('home.myDecks')}
@@ -139,6 +183,7 @@ export default function HomePage() {
             />
             {profile.admin && (
               <MenuTile
+                tourId="createCard"
                 onClick={() => navigate(ROUTES.CARD_CREATE)}
                 icon="🧪"
                 title={t('home.createCard')}
@@ -152,7 +197,9 @@ export default function HomePage() {
       </motion.div>
 
       {/* Profile menu - top right */}
-      <ProfileMenu />
+      <ProfileMenu onReplayIntro={() => setTourOpen(true)} />
+
+      {tourOpen && <HomeTour steps={tourSteps} onClose={closeTour} />}
     </div>
   );
 }
@@ -170,6 +217,7 @@ function Stat({ label, value, icon }: { label: string; value: ReactNode; icon: s
 }
 
 interface MenuTileProps {
+  tourId?: string;
   onClick: () => void;
   icon: string;
   title: string;
@@ -179,9 +227,10 @@ interface MenuTileProps {
   inline?: boolean;
 }
 
-function MenuTile({ onClick, icon, title, desc, className, large, inline }: MenuTileProps) {
+function MenuTile({ tourId, onClick, icon, title, desc, className, large, inline }: MenuTileProps) {
   return (
     <motion.button
+      data-tour={tourId}
       whileHover={{ scale: 1.02 }}
       whileTap={{ scale: 0.98 }}
       onClick={onClick}

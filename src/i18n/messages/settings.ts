@@ -18,6 +18,9 @@ export const settings: NamespaceMessages = {
     accessibility: 'Accesibilidad',
     reduceMotion: 'Reducir animaciones',
     reduceMotionHint: 'Desactiva transiciones y efectos de movimiento',
+    guide: 'Guía',
+    replayIntro: 'Repetir intro',
+    replayIntroHint: 'Vuelve a recorrer el menú principal con Byte',
     close: 'CERRAR',
   },
   en: {
@@ -36,6 +39,9 @@ export const settings: NamespaceMessages = {
     accessibility: 'Accessibility',
     reduceMotion: 'Reduce motion',
     reduceMotionHint: 'Turns off transitions and motion effects',
+    guide: 'Guide',
+    replayIntro: 'Replay intro',
+    replayIntroHint: 'Tour the main menu with Byte again',
     close: 'CLOSE',
   },
   fr: {
@@ -54,6 +60,9 @@ export const settings: NamespaceMessages = {
     accessibility: 'Accessibilité',
     reduceMotion: 'Réduire les animations',
     reduceMotionHint: 'Désactive les transitions et les effets de mouvement',
+    guide: 'Guide',
+    replayIntro: 'Revoir l’intro',
+    replayIntroHint: 'Refais le tour du menu principal avec Byte',
     close: 'FERMER',
   },
 };

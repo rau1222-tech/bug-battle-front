@@ -12,9 +12,11 @@ interface SettingsDialogProps {
   onOpenChange: (open: boolean) => void;
   /** 'game' hides the appearance section (the board has its own look). */
   scope?: 'all' | 'game';
+  /** Shows the "replay intro" button when provided. */
+  onReplayIntro?: () => void;
 }
 
-export default function SettingsDialog({ open, onOpenChange, scope = 'all' }: SettingsDialogProps) {
+export default function SettingsDialog({ open, onOpenChange, scope = 'all', onReplayIntro }: SettingsDialogProps) {
   const { t } = useI18n();
   const settings = useSettings();
 
@@ -107,6 +109,24 @@ export default function SettingsDialog({ open, onOpenChange, scope = 'all' }: Se
               />
             </Row>
           </section>
+
+          {onReplayIntro && (
+            <>
+              <Divider />
+              <section className="flex flex-col gap-3">
+                <h3 className={sectionTitleClass}>{t('settings.guide')}</h3>
+                <Row label={t('settings.replayIntro')} hint={t('settings.replayIntroHint')}>
+                  <button
+                    type="button"
+                    onClick={onReplayIntro}
+                    className="shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-md border border-cyan-500/30 text-cyan-200/80 hover:text-cyan-50 hover:bg-cyan-500/10 hover:border-cyan-400/50 font-display text-[10px] tracking-wider uppercase transition-colors"
+                  >
+                    <span aria-hidden>▶</span> {t('settings.replayIntro')}
+                  </button>
+                </Row>
+              </section>
+            </>
+          )}
         </div>
       </DialogContent>
     </Dialog>
